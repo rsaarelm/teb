@@ -10,3 +10,8 @@ license = "MIT/Apache-2.0"
 resolver = "2"
 
 [dependencies]
+anyhow = "1"
+itertools = "0.15.0"
+
+[dev-dependencies]
+pretty_assertions = "1"
