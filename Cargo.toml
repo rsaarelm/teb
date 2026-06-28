@@ -1,0 +1,12 @@
+[package]
+name = "teb"
+version = "0.1.0"
+edition = "2024"
+authors = ["Risto Saarelma <risto.saarelma@iki.fi>"]
+description = "Plaintext spreadsheet evaluator"
+homepage = "https://github.com/rsaarelm/teb"
+repository = "https://github.com/rsaarelm/teb"
+license = "MIT/Apache-2.0"
+resolver = "2"
+
+[dependencies]
