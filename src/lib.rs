@@ -8,6 +8,8 @@ use std::{
 use anyhow::{Result, bail};
 use itertools::Itertools;
 
+mod array;
+
 /// A table of whitespace-separated cells.
 #[derive(Clone, Default, Debug)]
 pub struct Table {
