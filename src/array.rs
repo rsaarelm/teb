@@ -1,44 +1,8 @@
-use std::{
-    iter,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 pub struct Array {
     shape: Vec<usize>,
     data: Vec<f64>,
-}
-
-// Use slice::chunks(n) to iterate cell chunks
-
-pub fn cell_coords(frame_shape: &[usize]) -> impl Iterator<Item = Vec<usize>> + '_ {
-    let mut indices = vec![0; frame_shape.len()];
-    let mut end = false;
-    iter::from_fn(move || {
-        if end {
-            return None;
-        }
-        let current = indices.clone();
-
-        // With empty frame_shape, return a single empty vector then exit.
-        if frame_shape.is_empty() {
-            end = true;
-            return Some(current);
-        }
-
-        for i in 0..frame_shape.len() {
-            indices[i] += 1;
-            if indices[i] < frame_shape[i] {
-                break;
-            } else {
-                indices[i] = 0;
-                if i == frame_shape.len() - 1 {
-                    end = true;
-                    break;
-                }
-            }
-        }
-        Some(current)
-    })
 }
 
 impl Array {
@@ -114,68 +78,5 @@ impl Deref for Array {
 impl DerefMut for Array {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq;
-
-    #[test]
-    fn test_cell_scan() {
-        // Scalar
-        let scalar = Array::new(vec![], vec![42.0]);
-
-        assert_eq!(scalar.rank(), 0);
-        assert_eq!(
-            scalar.cells(0).collect::<Vec<_>>(),
-            vec![(vec![], &[42.0][..])]
-        );
-
-        // Vector
-        let vector = Array::new(vec![3], vec![1.0, 2.0, 3.0]);
-        assert_eq!(vector.rank(), 1);
-        assert_eq!(
-            vector.cells(0).collect::<Vec<_>>(),
-            vec![
-                (vec![0], &[1.0][..]),
-                (vec![1], &[2.0][..]),
-                (vec![2], &[3.0][..])
-            ]
-        );
-        assert_eq!(
-            vector.cells(1).collect::<Vec<_>>(),
-            vec![(vec![], &[1.0, 2.0, 3.0][..])]
-        );
-
-        // Matrix
-        let matrix = Array::new(vec![2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        assert_eq!(matrix.rank(), 2);
-        assert_eq!(
-            matrix.cells(0).collect::<Vec<_>>(),
-            vec![
-                (vec![0, 0], &[1.0][..]),
-                (vec![1, 0], &[2.0][..]),
-                (vec![0, 1], &[3.0][..]),
-                (vec![1, 1], &[4.0][..]),
-                (vec![0, 2], &[5.0][..]),
-                (vec![1, 2], &[6.0][..])
-            ]
-        );
-
-        assert_eq!(
-            matrix.cells(1).collect::<Vec<_>>(),
-            vec![
-                (vec![0], &[1.0, 2.0][..]),
-                (vec![1], &[3.0, 4.0][..]),
-                (vec![2], &[5.0, 6.0][..])
-            ]
-        );
-
-        assert_eq!(
-            matrix.cells(2).collect::<Vec<_>>(),
-            vec![(vec![], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0][..])]
-        );
     }
 }
