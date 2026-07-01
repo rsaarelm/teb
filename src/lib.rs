@@ -9,6 +9,8 @@ use anyhow::{Result, bail};
 use itertools::Itertools;
 
 mod array;
+pub use array::Array;
+mod stack;
 
 /// A table of whitespace-separated cells.
 #[derive(Clone, Default, Debug)]

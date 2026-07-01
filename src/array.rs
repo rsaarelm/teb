@@ -1,5 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct Array {
     shape: Vec<usize>,
     data: Vec<f64>,
@@ -23,7 +24,7 @@ impl Array {
 
     /// Strip high dimensions of size 1, the array is structurally identical
     /// to an array with these dimensions removed.
-    pub fn effective_rank(&self) -> usize {
+    fn effective_rank(&self) -> usize {
         self.rank() - self.shape.iter().rev().take_while(|&&dim| dim == 1).count()
     }
 
@@ -64,6 +65,62 @@ impl Array {
             .zip(other.data.iter().cycle())
             .take(n)
             .map(|(&a, &b)| (a, b))
+    }
+
+    pub fn is_compatible_with(&self, other: &Array) -> bool {
+        let shared_rank = self.effective_rank().min(other.effective_rank());
+        self.shape[..shared_rank] == other.shape[..shared_rank]
+    }
+
+    pub fn result_shape(&self, other: &Array) -> Option<Vec<usize>> {
+        if self.is_compatible_with(other) {
+            if self.rank() >= other.rank() {
+                return Some(self.shape.clone());
+            } else {
+                return Some(other.shape.clone());
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Append the data of another array to this, assuming other is either the
+    /// shape of this whole array (rank goes up by 1) or the shape of a
+    /// top-level cell of this array.
+    pub fn append(&mut self, other: &Array) {
+        if other.shape() == self.shape() {
+            // It's an exact copy, increase our rank.
+            self.shape.push(2);
+        } else if other.shape() == self.cell_shape(self.rank() - 1) {
+            // It's a cell of our array, increment the size of the last dimension.
+            let last_dim = self.shape.last_mut().unwrap();
+            *last_dim += 1;
+        } else {
+            panic!("Incompatible shapes");
+        }
+        // XXX: Should we do something clever if this or the other has
+        // trailing ones in their shape?
+        self.data.extend_from_slice(&other.data);
+    }
+}
+
+impl<'a> FromIterator<&'a Array> for Array {
+    fn from_iter<I: IntoIterator<Item = &'a Array>>(iter: I) -> Self {
+        let mut iter = iter.into_iter();
+        let Some(mut seed) = iter.next().cloned() else {
+            return Array::default();
+        };
+
+        while let Some(next) = iter.next() {
+            seed.append(next);
+        }
+        seed
+    }
+}
+
+impl Default for Array {
+    fn default() -> Self {
+        Array::new(vec![0], vec![])
     }
 }
 
