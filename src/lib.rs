@@ -110,7 +110,7 @@ impl Table {
         Ok(table)
     }
 
-    /// Evalaute spreadsheet formulas in all cells and insert their results.
+    /// Evaluate spreadsheet formulas in all cells and insert their results.
     pub fn eval(&mut self, clear_outputs: bool) -> Result<()> {
         for row in 0..self.cells.len() {
             for col in 0..self.cells[row].len() {
