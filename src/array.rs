@@ -44,6 +44,16 @@ impl Array {
         &self.shape[..cell_rank]
     }
 
+    /// If the array represents a scalar value (single value, no shape),
+    /// return that value.
+    pub fn as_scalar(&self) -> Option<f64> {
+        if self.data.len() == 1 && self.shape.is_empty() {
+            Some(self.data[0])
+        } else {
+            None
+        }
+    }
+
     pub fn zip(&self, other: &Array) -> impl Iterator<Item = (f64, f64)> {
         // Both operands have scalar rank.
         // TODO: Abstract pairs method to handle higher-rank operands.
@@ -101,6 +111,12 @@ impl Array {
         // XXX: Should we do something clever if this or the other has
         // trailing ones in their shape?
         self.data.extend_from_slice(&other.data);
+    }
+}
+
+impl From<f64> for Array {
+    fn from(value: f64) -> Self {
+        Array::new(vec![1], vec![value])
     }
 }
 

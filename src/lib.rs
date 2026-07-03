@@ -12,9 +12,11 @@ mod array;
 pub use array::Array;
 mod parse;
 mod stack;
+mod table;
 
 /// A table of whitespace-separated cells.
 #[derive(Clone, Default, Debug)]
+#[deprecated]
 pub struct Table {
     pub cells: Vec<Vec<Cell>>,
     pub indent_prefix: String,
@@ -434,6 +436,7 @@ impl DerefMut for Stack {
 }
 
 #[derive(Clone, Debug)]
+#[deprecated]
 pub enum Cell {
     Text(String),
     Num(NumberValue),
@@ -552,6 +555,7 @@ impl Display for Cell {
 
 /// Value for numbers that stores the original string representation.
 #[derive(Clone, Debug)]
+#[deprecated]
 pub struct NumberValue(f64, String);
 
 impl FromStr for NumberValue {

@@ -190,3 +190,32 @@ pub fn subscript_digit(s: &str) -> Result<(u32, &str)> {
 
     Ok((digit, &s[c.len_utf8()..]))
 }
+
+/// If the nonempty lines in input all share the exact same prefix made of
+/// spaces and tabs, return that prefix. If nonempty lines have inconsistent
+/// indentation, return an error.
+pub fn indent_prefix(text: &str) -> Result<String> {
+    // Note that we can't use Rust's whitespace trimming functions here
+    // because they treat NBSPs as whitespace. We want to treat NBSPs as a
+    // non-whitespace character we can use to shape left trims of tables that
+    // have numbers in the leftmost column.
+    let mut prefix: Option<String> = None;
+    for (i, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let line_prefix = line
+            .chars()
+            .take_while(|c| *c == ' ' || *c == '\t')
+            .collect::<String>();
+        if let Some(ref p) = prefix {
+            if p != &line_prefix {
+                bail!("Inconsistent indentation on line {}", i + 1);
+            }
+        } else {
+            prefix = Some(line_prefix);
+        }
+    }
+
+    Ok(prefix.unwrap_or_default())
+}
