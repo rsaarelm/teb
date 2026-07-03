@@ -36,8 +36,9 @@ fn main() -> anyhow::Result<()> {
         None => io::read_to_string(io::stdin())?,
     };
 
-    let mut table = teb::Table::new(&input, !cli.no_number_parsing)?;
-    table.eval(cli.clear_outputs)?;
+    let table = teb::Table::new(&input, !cli.no_number_parsing)?;
+
+    // TODO: Spreadsheet eval.
 
     if cli.in_place {
         if let Some(path) = &cli.input {
