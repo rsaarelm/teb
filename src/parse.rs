@@ -2,6 +2,8 @@ use std::{rc::Rc, str::FromStr};
 
 use anyhow::{Result, bail};
 
+use crate::Table;
+
 #[derive(Clone, Default)]
 struct Cell {
     text: String,
@@ -218,4 +220,50 @@ pub fn indent_prefix(text: &str) -> Result<String> {
     }
 
     Ok(prefix.unwrap_or_default())
+}
+
+/// Return the next chunk of consecutive non-empty lines from input (with any
+/// preceding empty lines skipped), and the remaining input after the chunk.
+/// Return an error if there are no non-empty lines in the input.
+pub fn consecutive_content(input: &str) -> Result<(&str, &str)> {
+    let mut lines = input.lines().peekable();
+    // Skip leading empty lines.
+    while let Some(line) = lines.peek() {
+        if line.trim().is_empty() {
+            lines.next();
+        } else {
+            break;
+        }
+    }
+
+    if lines.peek().is_none() {
+        bail!("No non-empty lines in input");
+    }
+
+    let start = lines.peek().unwrap().as_ptr() as usize;
+    let mut end = input.len() + input.as_ptr() as usize;
+    while let Some(line) = lines.next() {
+        if line.trim().is_empty() {
+            end = line.as_ptr() as usize;
+            break;
+        }
+    }
+
+    let content = &input[start - input.as_ptr() as usize..end - input.as_ptr() as usize];
+    let rest = &input[end - input.as_ptr() as usize..];
+    Ok((content, rest))
+}
+
+pub fn tables(mut input: &str, parse_numbers: bool) -> Result<Vec<Table>> {
+    // While input remains, scan for groups of consecutive non-empty lines and
+    // try to parse them into tables.
+    let mut ret = Vec::new();
+
+    while let Ok((chunk, rest)) = consecutive_content(input) {
+        let table = Table::new(chunk, parse_numbers)?;
+        ret.push(table);
+        input = rest;
+    }
+
+    Ok(ret)
 }

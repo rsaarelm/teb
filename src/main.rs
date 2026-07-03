@@ -2,6 +2,7 @@ use std::{fs, io, path::PathBuf};
 
 use anyhow::bail;
 use clap::Parser;
+use teb::parse;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -36,20 +37,26 @@ fn main() -> anyhow::Result<()> {
         None => io::read_to_string(io::stdin())?,
     };
 
-    let table = teb::Table::new(&input, !cli.no_number_parsing)?;
+    let tables = parse::tables(&input, !cli.no_number_parsing)?;
+
+    let mut output = String::new();
+    for table in tables {
+        output.push_str(&table.to_string());
+        output.push('\n');
+    }
 
     // TODO: Spreadsheet eval.
 
     if cli.in_place {
         if let Some(path) = &cli.input {
-            fs::write(path, table.to_string())?;
+            fs::write(path, output)?;
         } else {
             bail!("In-place conversion requires an input file path, not stdin.");
         }
     } else if let Some(path) = &cli.output {
-        fs::write(path, table.to_string())?;
+        fs::write(path, output)?;
     } else {
-        print!("{table}");
+        print!("{output}");
     }
 
     Ok(())
