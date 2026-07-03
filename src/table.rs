@@ -36,14 +36,12 @@ impl Table {
         // Every line that has items past this gets all of the extra content
         // put verbatim in the last column, spaces and all.
         let mut columns = usize::MAX;
-        let mut is_empty = true;
         for line in input.lines() {
-            // Completely empty lines are allowed.
+            // Tables must be made of contiguous non-empty lines. Empty lines
+            // separate tables and should have been filtered out earlier.
             if line.trim().is_empty() {
-                continue;
+                bail!("Empty line in table input");
             }
-
-            is_empty = false;
 
             // Count whitespace-separated words on table lines.
             let line_columns = line.split_whitespace().count();
@@ -51,7 +49,7 @@ impl Table {
             columns = columns.min(line_columns);
         }
 
-        if is_empty {
+        if columns == usize::MAX {
             // No content seen, return the empty table.
             return Ok(table);
         }
@@ -60,10 +58,6 @@ impl Table {
 
         for line in input.lines() {
             let line = line.trim();
-            if line.is_empty() {
-                table.cells.push(Vec::new());
-                continue;
-            }
 
             // Offsets where words start in the line.
             //
