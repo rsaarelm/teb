@@ -10,6 +10,7 @@ use itertools::Itertools;
 
 mod array;
 pub use array::Array;
+mod parse;
 mod stack;
 
 /// A table of whitespace-separated cells.
