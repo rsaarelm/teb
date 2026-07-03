@@ -6,10 +6,6 @@ use itertools::Itertools;
 use crate::{Array, parse};
 
 const FLOAT_PRECISION: usize = 2;
-/// Minimum float value before scientific notation is enforced.
-const MIN_FLOAT: f64 = 1e-9;
-/// Maximum float value before scientific notation is enforced.
-const MAX_FLOAT: f64 = 1e18;
 
 // This is the textual table representation, see Spreadsheet for the semantic
 // representation.
@@ -137,18 +133,12 @@ impl Table {
             return;
         };
 
-        let abs = num.abs();
-        // Always use scientific notation for very large or very small
-        // numbers.
-        if MAX_FLOAT < abs || abs < MIN_FLOAT {
-            use_scientific = true;
-        }
-
         if use_scientific {
             cell.set_output(format!("{num:.p$e}", p = FLOAT_PRECISION));
             return;
         }
 
+        let abs = num.abs();
         // Figure out the precision, with precision 2 we want 1.234 -> "1.23"
         // but 0.000234 -> "0.00023".
         if abs < 1.0 && num != 0.0 {
