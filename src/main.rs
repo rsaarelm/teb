@@ -2,7 +2,7 @@ use std::{fs, io, path::PathBuf};
 
 use anyhow::bail;
 use clap::Parser;
-use teb::parse;
+use teb::{Vm, parse};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -37,10 +37,12 @@ fn main() -> anyhow::Result<()> {
         None => io::read_to_string(io::stdin())?,
     };
 
-    let tables = parse::tables(&input, !cli.no_number_parsing)?;
+    let mut tables = parse::tables(&input, !cli.no_number_parsing)?;
 
+    let mut vm = Vm::default();
     let mut output = String::new();
-    for table in &tables {
+    for table in &mut tables {
+        table.eval(&mut vm)?;
         output.push_str(&table.to_string());
         output.push('\n');
     }

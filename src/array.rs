@@ -22,6 +22,11 @@ impl Array {
         self.shape.len()
     }
 
+    /// Length along the top-level dimension, or 1 if the array is a scalar.
+    pub fn len(&self) -> usize {
+        self.shape.last().copied().unwrap_or(1)
+    }
+
     /// Strip high dimensions of size 1, the array is structurally identical
     /// to an array with these dimensions removed.
     fn effective_rank(&self) -> usize {
@@ -120,7 +125,7 @@ impl Array {
 
 impl From<f64> for Array {
     fn from(value: f64) -> Self {
-        Array::new(vec![1], vec![value])
+        Array::new(vec![], vec![value])
     }
 }
 
