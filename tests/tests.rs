@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use pretty_assertions::assert_eq;
 
-use teb;
+use teb::{self, Vm};
 
 /// Pairs of input / expected output.
 static SUITE: LazyLock<Vec<String>> = LazyLock::new(|| {
@@ -33,11 +33,15 @@ fn test_suite() {
     for a in SUITE.chunks(2) {
         let input = &a[0];
 
-        let tables = teb::parse::tables(&input, true).unwrap();
+        let mut tables = teb::parse::tables(&input, true).unwrap();
+        let len = tables.len();
+
         let mut output = String::new();
-        for (i, table) in tables.iter().enumerate() {
+        let mut vm = Vm::default();
+        for (i, table) in tables.iter_mut().enumerate() {
+            table.eval(&mut vm).unwrap();
             output.push_str(&table.to_string());
-            if i < tables.len() - 1 {
+            if i < len - 1 {
                 output.push('\n');
             }
         }

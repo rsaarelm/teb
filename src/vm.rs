@@ -1,5 +1,5 @@
 use crate::{Array, parse};
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 
 #[derive(Default)]
 pub struct Vm {
@@ -23,8 +23,11 @@ impl Vm {
         self.above_column = above_column;
     }
 
-    fn eval(&mut self, mut formula: &str) -> Result<Option<Array>> {
-        debug_assert!(formula.chars().all(|c| !c.is_whitespace()), "Formula should not contain whitespace");
+    pub fn eval(&mut self, mut formula: &str) -> Result<Option<Array>> {
+        debug_assert!(
+            formula.chars().all(|c| !c.is_whitespace()),
+            "Formula should not contain whitespace"
+        );
 
         while !formula.is_empty() {
             if let Ok((n, rest)) = parse::positive_float(formula) {
@@ -54,8 +57,6 @@ impl Vm {
             formula = rest;
         }
 
-
-
         // Only return values from the work stack. If there's only input stack
         // left, return none. This lets us not print noise values from things like
         // variable assignment.
@@ -69,7 +70,7 @@ impl Vm {
     // TODO: How do I abstract these so I can crank in the argument
     // rearranging?
 
-    pub fn monadic_pervasive(&mut self, f: impl Fn(f64) -> f64) -> Result<()>{
+    pub fn monadic_pervasive(&mut self, f: impl Fn(f64) -> f64) -> Result<()> {
         let a = self.pop()?;
         let ret = Array::new(a.shape().to_vec(), a.iter().map(|&x| f(x)));
         self.push(ret);
@@ -109,7 +110,7 @@ impl Vm {
 
     /// Pop at offset from top of stack. pop_at(0) is equivalent to pop(),
     /// pop_at(1) removes and returns the next highest element, etc.
-    fn pop_at(&mut self, i: usize) -> Result<Array> {
+    fn _pop_at(&mut self, i: usize) -> Result<Array> {
         if i < self.work_stack.len() {
             Ok(self.work_stack.remove(self.work_stack.len() - 1 - i))
         } else if i < self.work_stack.len() + self.input_stack.len() {

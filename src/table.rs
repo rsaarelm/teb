@@ -3,7 +3,7 @@ use std::{fmt::Display, iter, ops::Deref, str::FromStr};
 use anyhow::{Result, bail};
 use itertools::Itertools;
 
-use crate::{Array, parse};
+use crate::{Array, Spreadsheet, Vm, parse};
 
 const FLOAT_PRECISION: usize = 2;
 
@@ -114,14 +114,17 @@ impl Table {
         self.cells.iter().take(row).filter_map(move |r| r.get(col))
     }
 
+    pub fn eval(&mut self, vm: &mut Vm) -> Result<()> {
+        let mut sheet = Spreadsheet::from(self as &Table);
+        sheet.eval(vm)?;
+        sheet.apply(self);
+        Ok(())
+    }
+
     /// Width of the data-bearing columns. Ignores the potential last right
     /// column which can only contain text data.
     pub fn data_width(&self) -> usize {
-        self.cells
-            .iter()
-            .map(|c| c.len())
-            .min()
-            .unwrap_or(0)
+        self.cells.iter().map(|c| c.len()).min().unwrap_or(0)
     }
 
     pub fn rows(&self) -> impl Iterator<Item = &[Cell]> + '_ {
@@ -308,15 +311,6 @@ impl Cell {
             &self.text
         } else {
             ""
-        }
-    }
-
-    fn non_formula_part(&self) -> &str {
-        if let Some(formula) = &self.formula {
-            let len = formula.len() + 1; // +1 for the separator comma
-            &self.text[..self.text.len() - len]
-        } else {
-            &self.text
         }
     }
 
