@@ -40,12 +40,13 @@ fn main() -> anyhow::Result<()> {
     let tables = parse::tables(&input, !cli.no_number_parsing)?;
 
     let mut output = String::new();
-    for table in tables {
+    for table in &tables {
         output.push_str(&table.to_string());
         output.push('\n');
     }
 
-    // TODO: Spreadsheet eval.
+    // TODO: Construct spreadsheets from tables, evaluate formulas, update
+    // tables.
 
     if cli.in_place {
         if let Some(path) = &cli.input {

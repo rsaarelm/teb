@@ -13,8 +13,8 @@ const FLOAT_PRECISION: usize = 2;
 /// A textual table of whitespace-separated cells.
 #[derive(Clone, Default, Debug)]
 pub struct Table {
-    pub cells: Vec<Vec<Cell>>,
-    pub indent_prefix: String,
+    cells: Vec<Vec<Cell>>,
+    indent_prefix: String,
 }
 
 impl Table {
@@ -102,28 +102,47 @@ impl Table {
         Ok(table)
     }
 
-    fn column(&self, col: usize) -> impl Iterator<Item = &Cell> + '_ {
+    pub fn column(&self, col: usize) -> impl Iterator<Item = &Cell> + '_ {
         self.cells.iter().filter_map(move |row| row.get(col))
     }
 
-    fn to_the_left(&self, row: usize, col: usize) -> impl Iterator<Item = &Cell> + '_ {
+    pub fn to_the_left(&self, row: usize, col: usize) -> impl Iterator<Item = &Cell> + '_ {
         self.cells[row].iter().take(col)
     }
 
-    fn above(&self, row: usize, col: usize) -> impl Iterator<Item = &Cell> + '_ {
+    pub fn above(&self, row: usize, col: usize) -> impl Iterator<Item = &Cell> + '_ {
         self.cells.iter().take(row).filter_map(move |r| r.get(col))
     }
 
+    /// Width of the data-bearing columns. Ignores the potential last right
+    /// column which can only contain text data.
+    pub fn data_width(&self) -> usize {
+        self.cells
+            .iter()
+            .map(|c| c.len())
+            .min()
+            .unwrap_or(0)
+    }
+
+    pub fn rows(&self) -> impl Iterator<Item = &[Cell]> + '_ {
+        self.cells.iter().map(|r| r.as_slice())
+    }
+
+    pub fn clear_output(&mut self, row: usize, col: usize) {
+        let cell = &mut self.cells[row][col];
+        if cell.is_formula_cell() {
+            cell.set_output("");
+        }
+    }
+
     /// Assign an output value to a cell, doing fancy smart formatting.
-    fn assign(&mut self, row: usize, col: usize, looked_at_column: bool, value: &Array) {
+    pub fn assign(&mut self, row: usize, col: usize, value: &Array) {
         // Infect this cell with scientific notation if we see potential input
         // cells using it.
         let mut use_scientific = self
             .to_the_left(row, col)
             .any(|c| c.uses_scientific_notation());
-        if looked_at_column {
-            use_scientific |= self.above(row, col).any(|c| c.uses_scientific_notation());
-        }
+        use_scientific |= self.above(row, col).any(|c| c.uses_scientific_notation());
 
         let cell = &mut self.cells[row][col];
 
@@ -268,6 +287,14 @@ impl Cell {
 
     fn is_numeric(&self) -> bool {
         self.input.is_some() || self.formula.is_some()
+    }
+
+    pub fn input(&self) -> Option<f64> {
+        self.input
+    }
+
+    pub fn formula(&self) -> Option<&str> {
+        self.formula.as_deref()
     }
 
     /// Return part of the cell string that represents an input or output

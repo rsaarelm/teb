@@ -54,6 +54,10 @@ impl Array {
         }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &f64> {
+        self.data.iter()
+    }
+
     pub fn zip(&self, other: &Array) -> impl Iterator<Item = (f64, f64)> {
         // Both operands have scalar rank.
         // TODO: Abstract pairs method to handle higher-rank operands.

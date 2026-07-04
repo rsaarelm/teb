@@ -267,3 +267,28 @@ pub fn tables(mut input: &str, parse_numbers: bool) -> Result<Vec<Table>> {
 
     Ok(ret)
 }
+
+/// Read a positive floating point number from start of input, input can have
+/// any junk immediately after the number. The number mustn't have a leading +
+/// or - sign. Return a parsed number and the remaining input after it if
+/// successful.
+pub fn positive_float(s: &str) -> Result<(f64, &str)> {
+    if s.starts_with('+') || s.starts_with('-') {
+        bail!("Number must not have a leading + or - sign");
+    }
+
+    let (ret, bytes) = lexical_core::parse_partial::<f64>(s.as_bytes())?;
+    Ok((ret, &s[bytes..]))
+}
+
+/// Return the first non-whitespace character from input and the remaining
+/// input after it.
+pub fn char(s: &str) -> Result<(char, &str)> {
+    // Remember that we need to skip over any leading whitespace.
+    let s = s.trim_start();
+    if s.is_empty() {
+        bail!("No input");
+    }
+    let c = s.chars().next().unwrap();
+    Ok((c, &s[c.len_utf8()..]))
+}
