@@ -177,6 +177,15 @@ impl Vm {
             F('²') => {
                 self.monadic_pervasive(|x| x * x)?;
             }
+            F('⌊') => {
+                self.monadic_pervasive(|x| x.floor())?;
+            }
+            F('⁅') => {
+                self.monadic_pervasive(|x| x.round())?;
+            }
+            F('⌈') => {
+                self.monadic_pervasive(|x| x.ceil())?;
+            }
             // Array length
             F('#') | F('⧻') => {
                 let a = self.pop_monadic()?;
