@@ -182,6 +182,11 @@ impl Vm {
                 let a = self.pop_monadic()?;
                 self.push((a.length() as f64).into());
             }
+            // Identity
+            F('∘') => {
+                let a = self.pop_monadic()?;
+                self.push(a);
+            }
             // First
             F('⊢') => {
                 let a = self.pop_monadic()?;
