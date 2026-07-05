@@ -131,9 +131,38 @@ impl Vm {
             F('%') => {
                 self.dyadic_pervasive(|x, y| x / y)?;
             }
+            // Array length
             F('#') => {
                 let a = self.pop()?;
                 self.push((a.length() as f64).into());
+            }
+            // First
+            F('⊢') => {
+                let a = self.pop()?;
+                if a.is_scalar() {
+                    self.push(a);
+                } else {
+                    let cells = a.explode();
+                    if let Some(first) = cells.first() {
+                        self.push(first.to_owned());
+                    } else {
+                        bail!("Cannot take first of empty array");
+                    }
+                }
+            }
+            // Last
+            F('⊣') => {
+                let a = self.pop()?;
+                if a.is_scalar() {
+                    self.push(a);
+                } else {
+                    let cells = a.explode();
+                    if let Some(first) = cells.last() {
+                        self.push(first.to_owned());
+                    } else {
+                        bail!("Cannot take last of empty array");
+                    }
+                }
             }
 
             F(c) => {
