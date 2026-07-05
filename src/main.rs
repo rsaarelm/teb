@@ -41,10 +41,13 @@ fn main() -> anyhow::Result<()> {
 
     let mut vm = Vm::default();
     let mut output = String::new();
-    for table in &mut tables {
+    let len = tables.len();
+    for (i, table) in tables.iter_mut().enumerate() {
         table.eval(&mut vm)?;
         output.push_str(&table.to_string());
-        output.push('\n');
+        if i < len - 1 {
+            output.push('\n');
+        }
     }
 
     // TODO: Construct spreadsheets from tables, evaluate formulas, update
