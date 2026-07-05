@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::Table;
 
-pub fn subscript_digit(s: &str) -> Result<(u32, &str)> {
+pub fn subscript_digit(s: &str) -> Result<(usize, &str)> {
     if s.is_empty() {
         bail!("No input");
     }

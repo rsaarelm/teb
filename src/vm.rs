@@ -17,6 +17,11 @@ pub struct Vm {
     /// Column on the spreadsheet above the current cell, can be pulled into
     /// stack as an array using a special operation.
     above_column: Vec<Array>,
+
+    // XXX: Having the registers in object state is error-prone, should move
+    // to some sort of disposable context object instead.
+    shift_1: Option<usize>,
+    shift_2: Option<usize>,
 }
 
 impl Vm {
@@ -40,6 +45,9 @@ impl Vm {
         );
 
         while !formula.is_empty() {
+            // Reset the shift registers before each top-level operation.
+            self.shift_1 = None;
+            self.shift_2 = None;
             let (op, rest) = operation(formula)?;
             formula = rest;
             self.eval(op)?;
@@ -59,6 +67,18 @@ impl Vm {
         use Operation::*;
 
         match op {
+            Shift1(p1, op) => {
+                self.shift_1 = Some(p1 - 1);
+                self.shift_2 = None;
+                return self.eval(*op);
+            }
+
+            Shift2(p1, p2, op) => {
+                self.shift_1 = Some(p1 - 1);
+                self.shift_2 = Some(p2 - 1);
+                return self.eval(*op);
+            }
+
             Number(n) => {
                 self.push(n.into());
             }
@@ -72,7 +92,7 @@ impl Vm {
             }
 
             AssignTo(c) => {
-                let a = self.pop()?;
+                let a = self.pop_monadic()?;
                 self.bindings.insert(c, a);
             }
 
@@ -95,7 +115,7 @@ impl Vm {
             Reduce(op) => {
                 // Reduce array contents in a temporary VM.
                 let mut scratch = self.spawn();
-                let a = self.pop()?;
+                let a = self.pop_monadic()?;
                 if a.is_scalar() {
                     bail!("Cannot reduce a scalar");
                 }
@@ -156,12 +176,12 @@ impl Vm {
             }
             // Array length
             F('#') => {
-                let a = self.pop()?;
+                let a = self.pop_monadic()?;
                 self.push((a.length() as f64).into());
             }
             // First
             F('⊢') => {
-                let a = self.pop()?;
+                let a = self.pop_monadic()?;
                 if a.is_scalar() {
                     self.push(a);
                 } else {
@@ -175,7 +195,7 @@ impl Vm {
             }
             // Last
             F('⊣') => {
-                let a = self.pop()?;
+                let a = self.pop_monadic()?;
                 if a.is_scalar() {
                     self.push(a);
                 } else {
@@ -200,15 +220,14 @@ impl Vm {
     // rearranging?
 
     pub fn monadic_pervasive(&mut self, f: impl Fn(f64) -> f64) -> Result<()> {
-        let a = self.pop()?;
+        let a = self.pop_monadic()?;
         let ret = Array::new(a.shape().to_vec(), a.iter().map(|&x| f(x)));
         self.push(ret);
         Ok(())
     }
 
     pub fn dyadic_pervasive(&mut self, f: impl Fn(f64, f64) -> f64) -> Result<()> {
-        let b = self.pop()?;
-        let a = self.pop()?;
+        let (a, b) = self.pop_dyadic()?;
 
         let Some(shape) = a.result_shape(&b) else {
             bail!(
@@ -247,9 +266,53 @@ impl Vm {
         }
     }
 
+    /// Pop arguments for monadic op using shift value if available.
+    fn pop_monadic(&mut self) -> Result<Array> {
+        if self.shift_2.is_some() {
+            bail!("Monadic operation cannot use two shift values");
+        }
+        if let Some(n) = self.shift_1 {
+            self.pop_at(n)
+        } else {
+            self.pop()
+        }
+    }
+
+    /// Pop arguments for dyadic op using shift value if available.
+    fn pop_dyadic(&mut self) -> Result<(Array, Array)> {
+        // This gets tricky, both values refer to the stack before any pops,
+        // and might even refer to the same value.
+        let p1 = self.shift_1.unwrap_or(1);
+        let p2 = self.shift_2.unwrap_or(0);
+
+        let a = self.stack_nth(p1)?.clone();
+        let b = self.stack_nth(p2)?.clone();
+
+        // Pop the higher first so we don't invalidate the lower index.
+        self.pop_at(p1.max(p2))?;
+        // Check that they are actually two different values, if they're the
+        // same we only need to remove it once.
+        if p1 != p2 {
+            self.pop_at(p1.min(p2))?;
+        }
+
+        Ok((a, b))
+    }
+
+    fn stack_nth(&self, i: usize) -> Result<&Array> {
+        if i < self.work_stack.len() {
+            Ok(&self.work_stack[self.work_stack.len() - 1 - i])
+        } else if i < self.work_stack.len() + self.input_stack.len() {
+            let input_index = i - self.work_stack.len();
+            Ok(&self.input_stack[self.input_stack.len() - 1 - input_index])
+        } else {
+            bail!("Stack underflow")
+        }
+    }
+
     /// Pop at offset from top of stack. pop_at(0) is equivalent to pop(),
     /// pop_at(1) removes and returns the next highest element, etc.
-    fn _pop_at(&mut self, i: usize) -> Result<Array> {
+    fn pop_at(&mut self, i: usize) -> Result<Array> {
         if i < self.work_stack.len() {
             Ok(self.work_stack.remove(self.work_stack.len() - 1 - i))
         } else if i < self.work_stack.len() + self.input_stack.len() {
@@ -285,11 +348,32 @@ enum Operation {
     ImplodeStack,
     /// Insert column from above into stack.
     InsertColumn,
+    /// Shift first (deeper in the stack) argument of operation.
+    Shift1(usize, Box<Operation>),
+    /// Shift both arguments of operation.
+    Shift2(usize, usize, Box<Operation>),
+}
+
+fn operation(s: &str) -> Result<(Operation, &str)> {
+    use Operation::*;
+
+    let (inner, rest) = inner_operation(s)?;
+
+    // See if we have indexing digits after the operation.
+    if let Ok((p1, rest)) = parse::subscript_digit(rest) {
+        if let Ok((p2, rest)) = parse::subscript_digit(rest) {
+            Ok((Shift2(p1, p2, Box::new(inner)), rest))
+        } else {
+            Ok((Shift1(p1, Box::new(inner)), rest))
+        }
+    } else {
+        Ok((inner, rest))
+    }
 }
 
 /// Parse the next operation from input, simple ones are usually one
 /// character, modifiers create multi-char operations.
-fn operation(s: &str) -> Result<(Operation, &str)> {
+fn inner_operation(s: &str) -> Result<(Operation, &str)> {
     use Operation::*;
 
     let Some(c) = s.chars().next() else {
