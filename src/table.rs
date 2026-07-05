@@ -317,7 +317,7 @@ impl Cell {
     /// How much should this cell be indented when printed to a column with
     /// the given maximum left extent.
     fn column_indent(&self, max_left_extent: usize) -> usize {
-        if !self.is_numeric() {
+        if !self.is_numeric() || self.number_part().is_empty() {
             return 0;
         }
         let left_extent = self.left_extension();

@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{Array, parse};
 use anyhow::{Result, bail};
 
 #[derive(Clone, Default)]
 pub struct Vm {
-    // TODO: Variable bindings.
+    bindings: HashMap<char, Array>,
+
     /// Stack extracted from spreadsheet, will not be used for return values.
     input_stack: Vec<Array>,
     /// Stack used for intermediate calculations and the return value.
@@ -51,6 +54,19 @@ impl Vm {
         match op {
             Number(n) => {
                 self.push(n.into());
+            }
+
+            Var(c) => {
+                if let Some(a) = self.bindings.get(&c) {
+                    self.push(a.clone());
+                } else {
+                    bail!("Undefined variable: '{c}'");
+                }
+            }
+
+            AssignTo(c) => {
+                let a = self.pop()?;
+                self.bindings.insert(c, a);
             }
 
             // Modifiers
@@ -248,8 +264,12 @@ impl Vm {
 enum Operation {
     /// Call a function.
     F(char),
+    /// Refer a variable,
+    Var(char),
     /// Push a number to stack.
     Number(f64),
+    /// Assign to variable
+    AssignTo(char),
     /// Reduce array with inner operation.
     Reduce(Box<Operation>),
     /// Execute two operations with the same inputs.
@@ -282,6 +302,13 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
 
     // Rewrite the above as a match statement:
     match c {
+        c if c.is_ascii_alphabetic() => Ok((Var(c), rest)),
+        '→' => {
+            let Ok((Var(c), rest)) = operation(rest) else {
+                bail!("Expected variable after assignment operator");
+            };
+            Ok((AssignTo(c), rest))
+        }
         '/' => {
             let (op, rest) = operation(rest)?;
             Ok((Reduce(Box::new(op)), rest))
