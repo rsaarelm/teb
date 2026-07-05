@@ -15,15 +15,15 @@ xyzzy  plugh
 
  1.23e42  5.13e3
 42.68e13  6.72e12
-
+# Simple formulas
 1 2 ,+
 
 1  2  3,+
-
+# Stack collapsing
 1 2 3 4 ,]/+
 
 1  2  3  4  10,]/+
-
+# Mean calculation
 1 2 3 4 ,]⊃/+#%
 
 1  2  3  4  2.50,]⊃/+#%
@@ -39,7 +39,7 @@ xyzzy  plugh
 3
 4
 2.50,⇓⊃/+#%
-
+# First of array
 5 ,⊢
 
 5  5,⊢
@@ -53,7 +53,7 @@ xyzzy  plugh
 2
 3
 1,⇓⊢
-
+# Last of array
 1
 2
 3
@@ -63,11 +63,11 @@ xyzzy  plugh
 2
 3
 3,⇓⊣
-
+# Comma-separated numeric literals in formula
 0 ,5,6.0e0+
 
 0  11,5,6.0e0+
-
+# Empty formulas copy above formula down a column
 1 2 ,+
 3 4 ,
 5 6 ,
@@ -75,9 +75,17 @@ xyzzy  plugh
 1  2   3,+
 3  4   7,
 5  6  11,
-
+# Variable assignment
 3.14 ,→p
 - ,p
 
 3.14  ,→p
 -     3.14,p
+# Variable assignment in separate table
+3.14 ,→p
+%
+1 2 ,p*
+
+3.14  ,→p
+%
+1  2  6.28,p*

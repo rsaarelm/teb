@@ -11,7 +11,7 @@ static SUITE: LazyLock<Vec<String>> = LazyLock::new(|| {
     for line in input.lines() {
         let line = line.trim_end();
         // Empty lines separate inputs.
-        if line.is_empty() {
+        if line.is_empty() || line.starts_with('#') {
             ret.push(String::new());
             continue;
         }
