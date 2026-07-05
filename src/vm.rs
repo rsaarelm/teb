@@ -26,6 +26,13 @@ impl Vm {
         self.above_column = above_column;
     }
 
+    /// Make a clean copy that shares bindings.
+    fn spawn(&self) -> Self {
+        let mut ret = self.clone();
+        ret.init(Default::default(), Default::default());
+        ret
+    }
+
     pub fn run(&mut self, mut formula: &str) -> Result<Option<Array>> {
         debug_assert!(
             formula.chars().all(|c| !c.is_whitespace()),
@@ -87,7 +94,7 @@ impl Vm {
             }
             Reduce(op) => {
                 // Reduce array contents in a temporary VM.
-                let mut scratch = Vm::default();
+                let mut scratch = self.spawn();
                 let a = self.pop()?;
                 if a.is_scalar() {
                     bail!("Cannot reduce a scalar");
