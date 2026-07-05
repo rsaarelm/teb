@@ -74,7 +74,7 @@ pub fn consecutive_content(input: &str) -> Result<(&str, &str)> {
 
     let start = lines.peek().unwrap().as_ptr() as usize;
     let mut end = input.len() + input.as_ptr() as usize;
-    while let Some(line) = lines.next() {
+    for line in lines {
         if line.trim().is_empty() {
             end = line.as_ptr() as usize;
             break;

@@ -340,7 +340,7 @@ impl Cell {
     fn left_extension(&self) -> usize {
         let num = self.number_part();
 
-        if let Some(pos) = num.find(|c| c == 'e' || c == 'E') {
+        if let Some(pos) = num.find(['e', 'E']) {
             pos // First try to align by the part before an exponent marker,
         } else if let Some(pos) = num.find('.') {
             pos // then by the part before a decimal point,

@@ -16,12 +16,12 @@ impl Spreadsheet {
             // complex value struct at spreadsheet level that can
             // track input cells.
             match &self.cells[i][j] {
-                Cell::Output(Some(value), _) => table.assign(i, j, &value),
+                Cell::Output(Some(value), _) => table.assign(i, j, value),
                 Cell::Output(None, _) => table.clear_output(i, j),
                 _ => {}
             }
             if let Cell::Output(Some(value), _) = &self.cells[i][j] {
-                table.assign(i, j, &value);
+                table.assign(i, j, value);
             }
         }
     }
@@ -69,7 +69,7 @@ impl Spreadsheet {
         );
 
         let height = self.cells.len();
-        let width = self.cells.get(0).map(|row| row.len()).unwrap_or(0);
+        let width = self.cells.first().map(|row| row.len()).unwrap_or(0);
 
         (0..height).flat_map(move |i| (0..width).map(move |j| (i, j)))
     }

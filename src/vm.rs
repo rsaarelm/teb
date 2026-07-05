@@ -131,6 +131,10 @@ impl Vm {
             F('%') => {
                 self.dyadic_pervasive(|x, y| x / y)?;
             }
+            F('#') => {
+                let a = self.pop()?;
+                self.push((a.length() as f64).into());
+            }
 
             F(c) => {
                 bail!("Unknown function: '{c}'");
@@ -259,7 +263,7 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
             Ok((Fork(Box::new(op1), Box::new(op2)), rest))
         }
         ']' => Ok((ImplodeStack, rest)),
-        '↓' => Ok((InsertColumn, rest)),
+        '⇓' => Ok((InsertColumn, rest)),
         // Anything we don't know and can't rule off with blanket rules is assumed
         // to be a function call, the intepreter can figure it out.
         _ => Ok((F(c), rest)),

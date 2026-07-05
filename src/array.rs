@@ -27,7 +27,7 @@ impl Array {
     }
 
     /// Length along the top-level dimension, or 1 if the array is a scalar.
-    pub fn len(&self) -> usize {
+    pub fn length(&self) -> usize {
         self.shape.last().copied().unwrap_or(1)
     }
 
@@ -99,9 +99,9 @@ impl Array {
     pub fn result_shape(&self, other: &Array) -> Option<Vec<usize>> {
         if self.is_compatible_with(other) {
             if self.rank() >= other.rank() {
-                return Some(self.shape.clone());
+                Some(self.shape.clone())
             } else {
-                return Some(other.shape.clone());
+                Some(other.shape.clone())
             }
         } else {
             None
@@ -131,12 +131,12 @@ impl Array {
     pub fn explode(&self) -> Vec<Array> {
         assert!(self.rank() > 0, "Cannot explode a scalar array");
         let size = self.cell_size(self.rank() - 1);
-        let n = self.len();
+        let n = self.length();
         let mut result = Vec::with_capacity(n);
         for i in 0..n {
             result.push(Array::new(
                 self.cell_shape(self.rank() - 1).to_vec(),
-                (&self.data[i * size..(i + 1) * size]).to_vec(),
+                (self.data[i * size..(i + 1) * size]).to_vec(),
             ));
         }
         result
@@ -156,7 +156,7 @@ impl<'a> FromIterator<&'a Array> for Array {
             return Array::default();
         };
 
-        while let Some(next) = iter.next() {
+        for next in iter {
             seed.append(next);
         }
         seed
