@@ -169,14 +169,12 @@ impl Table {
             return;
         }
 
-        let scale = 10f64.powi(FLOAT_PRECISION as i32);
-        let rounded = (abs * scale).round();
-        let all_decimal_digits_are_zero = rounded.rem_euclid(scale) == 0.0;
-
-        if all_decimal_digits_are_zero {
-            cell.set_output(format!("{}", num.trunc()));
+        let default = format!("{num}");
+        let rounded = format!("{num:.p$}", p = FLOAT_PRECISION);
+        if default.len() < rounded.len() {
+            cell.set_output(default);
         } else {
-            cell.set_output(format!("{num:.p$}", p = FLOAT_PRECISION));
+            cell.set_output(rounded);
         }
     }
 }

@@ -26,7 +26,7 @@ xyzzy  plugh
 # Mean calculation
 1 2 3 4 ,]⊃/+#%
 
-1  2  3  4  2.50,]⊃/+#%
+1  2  3  4  2.5,]⊃/+#%
 
 1
 2
@@ -38,7 +38,7 @@ xyzzy  plugh
 2
 3
 4
-2.50,⇓⊃/+#%
+2.5,⇓⊃/+#%
 # First of array
 5 ,⊢
 
