@@ -57,7 +57,7 @@ impl Spreadsheet {
             .collect::<Vec<_>>();
 
         vm.init(left_vals, top_vals);
-        vm.eval(formula)
+        vm.run(formula)
     }
 
     fn posns(&self) -> impl Iterator<Item = (usize, usize)> {

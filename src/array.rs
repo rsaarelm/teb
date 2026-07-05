@@ -22,6 +22,10 @@ impl Array {
         self.shape.len()
     }
 
+    pub fn is_scalar(&self) -> bool {
+        self.shape.is_empty()
+    }
+
     /// Length along the top-level dimension, or 1 if the array is a scalar.
     pub fn len(&self) -> usize {
         self.shape.last().copied().unwrap_or(1)
@@ -33,12 +37,13 @@ impl Array {
         self.rank() - self.shape.iter().rev().take_while(|&&dim| dim == 1).count()
     }
 
-    pub fn cell_len(&self, cell_rank: usize) -> usize {
+    /// Number of scalars in a cell of this array of the given rank.
+    pub fn cell_size(&self, cell_rank: usize) -> usize {
         assert!(
             cell_rank <= self.shape.len(),
             "Cell rank is greater than array rank"
         );
-        self.shape[cell_rank..].iter().product()
+        self.shape[0..cell_rank].iter().product()
     }
 
     pub fn cell_shape(&self, cell_rank: usize) -> &[usize] {
@@ -120,6 +125,21 @@ impl Array {
         // XXX: Should we do something clever if this or the other has
         // trailing ones in their shape?
         self.data.extend_from_slice(&other.data);
+    }
+
+    /// Explode the array into cells along its highest dimension.
+    pub fn explode(&self) -> Vec<Array> {
+        assert!(self.rank() > 0, "Cannot explode a scalar array");
+        let size = self.cell_size(self.rank() - 1);
+        let n = self.len();
+        let mut result = Vec::with_capacity(n);
+        for i in 0..n {
+            result.push(Array::new(
+                self.cell_shape(self.rank() - 1).to_vec(),
+                (&self.data[i * size..(i + 1) * size]).to_vec(),
+            ));
+        }
+        result
     }
 }
 
