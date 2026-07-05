@@ -97,6 +97,21 @@ impl From<&Table> for Spreadsheet {
             cells.push(row);
         }
 
+        // For output cells with empty formulas, copy the last non-empty
+        // formula from the same column above.
+        for j in 0..width {
+            let mut last_formula = None;
+            for i in 0..cells.len() {
+                if let Cell::Output(_, formula) = &cells[i][j] {
+                    if !formula.is_empty() {
+                        last_formula = Some(formula.clone());
+                    } else if let Some(last_formula) = &last_formula {
+                        cells[i][j] = Cell::Output(Default::default(), last_formula.clone());
+                    }
+                }
+            }
+        }
+
         Spreadsheet { cells }
     }
 }
