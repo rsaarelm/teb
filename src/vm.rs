@@ -168,14 +168,17 @@ impl Vm {
             F('-') => {
                 self.dyadic_pervasive(|x, y| x - y)?;
             }
-            F('*') => {
+            F('*') | F('×') => {
                 self.dyadic_pervasive(|x, y| x * y)?;
             }
-            F('%') => {
+            F('%') | F('÷') => {
                 self.dyadic_pervasive(|x, y| x / y)?;
             }
+            F('²') => {
+                self.monadic_pervasive(|x| x * x)?;
+            }
             // Array length
-            F('#') => {
+            F('#') | F('⧻') => {
                 let a = self.pop_monadic()?;
                 self.push((a.length() as f64).into());
             }
