@@ -274,10 +274,6 @@ impl Cell {
     pub fn text(s: impl Into<String>) -> Self {
         let text = s.into();
         assert!(!text.is_empty(), "Cell: Text is empty");
-        assert!(
-            !text.contains(char::is_whitespace),
-            "Cell: Text contains whitespace"
-        );
 
         Cell {
             text,
