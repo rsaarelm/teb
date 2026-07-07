@@ -25,6 +25,22 @@ pub fn subscript_digit(s: &str) -> Result<(usize, &str)> {
     Ok((digit, &s[c.len_utf8()..]))
 }
 
+pub fn subscript_number(s: &str) -> Result<(u32, &str)> {
+    let mut number = 0;
+    let mut rest = s;
+
+    while let Ok((digit, r)) = subscript_digit(rest) {
+        number = number * 10 + digit as u32;
+        rest = r;
+    }
+
+    if rest == s {
+        bail!("No subscript digits found");
+    }
+
+    Ok((number, rest))
+}
+
 /// If the nonempty lines in input all share the exact same prefix made of
 /// spaces and tabs, return that prefix. If nonempty lines have inconsistent
 /// indentation, return an error.

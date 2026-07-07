@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- Exponential operator, inverse modifier and logarithm using exponential's inverse.
+
 ### Changed
 - Removed ubiquitous subscript indexing, now there's a dedicated `.` operator for rearranging the stack.
 

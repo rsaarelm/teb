@@ -1,4 +1,7 @@
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    f64,
+};
 
 use crate::{Array, parse};
 use anyhow::{Result, bail};
@@ -159,6 +162,17 @@ impl Vm {
                 }
             }
 
+            Exp(base) => {
+                self.monadic_pervasive(|x| base.powf(x))?;
+            }
+
+            Log(base) => {
+                if base <= 0.0 || base == 1.0 {
+                    bail!("Logarithm base must be positive and not equal to 1");
+                }
+                self.monadic_pervasive(|x| x.log(base))?;
+            }
+
             // Functions
             F('+') => {
                 self.dyadic_pervasive(|x, y| x + y)?;
@@ -174,6 +188,9 @@ impl Vm {
             }
             F('²') => {
                 self.monadic_pervasive(|x| x * x)?;
+            }
+            F('√') => {
+                self.monadic_pervasive(|x| x.sqrt())?;
             }
             F('⌊') => {
                 self.monadic_pervasive(|x| x.floor())?;
@@ -320,6 +337,13 @@ enum Operation {
     Var(char),
     /// Push a number to stack.
     Number(f64),
+
+    /// Exponential with base, raise base to value at top of stack.
+    Exp(f64),
+
+    /// Take logarithm with base from top of stack.
+    Log(f64),
+
     /// Assign to variable
     AssignTo(char),
     /// Reduce array with inner operation.
@@ -332,6 +356,23 @@ enum Operation {
     InsertColumn,
     /// Pop named stack indices and push them in in the given pattern.
     Rerrange(Vec<usize>),
+}
+
+impl Operation {
+    pub fn invert(&self) -> Result<Operation> {
+        // Inversion is sort of hairy, add cases as we go.
+        use Operation::*;
+        match self {
+            F('∘') => Ok(F('∘')),
+
+            F('²') => Ok(F('√')),
+            F('√') => Ok(F('²')),
+
+            Log(base) => Ok(Exp(*base)),
+            Exp(base) => Ok(Log(*base)),
+            _ => bail!("Cannot invert operation: '{self:?}'"),
+        }
+    }
 }
 
 /// Parse the next operation from input, simple ones are usually one
@@ -392,6 +433,20 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
             }
             Ok((Rerrange(indices), rest))
         }
+        // Inverse modifier.
+        '°' => {
+            let (op, rest) = operation(rest)?;
+            Ok((op.invert()?, rest))
+        }
+
+        'ₑ' => {
+            if let Ok((base, rest)) = parse::subscript_number(rest) {
+                Ok((Exp(base as f64), rest))
+            } else {
+                Ok((Exp(f64::consts::E), rest))
+            }
+        }
+
         // Anything we don't know and can't rule off with blanket rules is assumed
         // to be a function call, the intepreter can figure it out.
         _ => Ok((F(c), rest)),
