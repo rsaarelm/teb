@@ -61,13 +61,14 @@ In this case we only want the last value of the array so we use the last (`⊣`)
 
 ### Body-mass-index calculation
 
-You can use subscripts to assign different stack variables to pull, `²` will normally remove and square the top value from stack but `²₂` will instead remove and square the second value.
+The rearrange operator `.` takes a list of subscripts of stack indices to move to the top of the stack.
+There's a convenience operator `²` for squaring a value. We use `.₂` to bring height (the second stack value) to the top to be squared before weight is divided by it to get the BMI.
 You get the average of the column by using the fork (`⊃`) modifier that applies two operations to input.
 `#` returns the number of rows in the array.
 
 ```
 --        height(m)  weight(kg)  BMI
-Alice     1.62        56         21.34,²₂÷
+Alice     1.62        56         21.34,.₂²÷
 Bob       1.70        68         23.53,
 Carol     1.78        74         23.36,
 Vladimir  1.92       230         62.39,
@@ -78,6 +79,9 @@ Vladimir  1.92       230         62.39,
 
 You can assign constants in a separate table above the main one and they'll persist.
 Use scientific notation in the input cells and output will also use it.
+
+Text blocks separated by an empty line are treated as separate tables in terms of formatting and column operations.
+Assigned variables will persist to lower tables when running `teb` over multiple tables though.
 
 ```
 --      -

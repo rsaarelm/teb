@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::{Array, parse};
 use anyhow::{Result, bail};
@@ -17,11 +17,6 @@ pub struct Vm {
     /// Column on the spreadsheet above the current cell, can be pulled into
     /// stack as an array using a special operation.
     above_column: Vec<Array>,
-
-    // XXX: Having the registers in object state is error-prone, should move
-    // to some sort of disposable context object instead.
-    shift_1: Option<usize>,
-    shift_2: Option<usize>,
 }
 
 impl Vm {
@@ -45,9 +40,6 @@ impl Vm {
         );
 
         while !formula.is_empty() {
-            // Reset the shift registers before each top-level operation.
-            self.shift_1 = None;
-            self.shift_2 = None;
             let (op, rest) = operation(formula)?;
             formula = rest;
             self.eval(op)?;
@@ -67,18 +59,6 @@ impl Vm {
         use Operation::*;
 
         match op {
-            Shift1(p1, op) => {
-                self.shift_1 = Some(p1 - 1);
-                self.shift_2 = None;
-                return self.eval(*op);
-            }
-
-            Shift2(p1, p2, op) => {
-                self.shift_1 = Some(p1 - 1);
-                self.shift_2 = Some(p2 - 1);
-                return self.eval(*op);
-            }
-
             Number(n) => {
                 self.push(n.into());
             }
@@ -92,7 +72,7 @@ impl Vm {
             }
 
             AssignTo(c) => {
-                let a = self.pop_monadic()?;
+                let a = self.pop()?;
                 self.bindings.insert(c, a);
             }
 
@@ -115,7 +95,7 @@ impl Vm {
             Reduce(op) => {
                 // Reduce array contents in a temporary VM.
                 let mut scratch = self.spawn();
-                let a = self.pop_monadic()?;
+                let a = self.pop()?;
                 if a.is_scalar() {
                     bail!("Cannot reduce a scalar");
                 }
@@ -161,6 +141,24 @@ impl Vm {
                 self.push(ret);
             }
 
+            Rerrange(indices) => {
+                let mut new_stack = Vec::new();
+                let mut pops = BTreeSet::new();
+                for i in indices {
+                    new_stack.push(self.stack_nth(i)?.clone());
+                    pops.insert(i);
+                }
+                // Pop from largest to smallest so we don't mess up the stack
+                // order.
+                for i in pops.into_iter().rev() {
+                    self.pop_at(i)?;
+                }
+                // Push the new stuff in.
+                for a in new_stack {
+                    self.push(a);
+                }
+            }
+
             // Functions
             F('+') => {
                 self.dyadic_pervasive(|x, y| x + y)?;
@@ -188,17 +186,17 @@ impl Vm {
             }
             // Array length
             F('#') | F('⧻') => {
-                let a = self.pop_monadic()?;
+                let a = self.pop()?;
                 self.push((a.length() as f64).into());
             }
             // Identity
             F('∘') => {
-                let a = self.pop_monadic()?;
+                let a = self.pop()?;
                 self.push(a);
             }
             // First
             F('⊢') => {
-                let a = self.pop_monadic()?;
+                let a = self.pop()?;
                 if a.is_scalar() {
                     self.push(a);
                 } else {
@@ -212,7 +210,7 @@ impl Vm {
             }
             // Last
             F('⊣') => {
-                let a = self.pop_monadic()?;
+                let a = self.pop()?;
                 if a.is_scalar() {
                     self.push(a);
                 } else {
@@ -237,14 +235,14 @@ impl Vm {
     // rearranging?
 
     pub fn monadic_pervasive(&mut self, f: impl Fn(f64) -> f64) -> Result<()> {
-        let a = self.pop_monadic()?;
+        let a = self.pop()?;
         let ret = Array::new(a.shape().to_vec(), a.iter().map(|&x| f(x)));
         self.push(ret);
         Ok(())
     }
 
     pub fn dyadic_pervasive(&mut self, f: impl Fn(f64, f64) -> f64) -> Result<()> {
-        let (a, b) = self.pop_dyadic()?;
+        let (b, a) = (self.pop()?, self.pop()?);
 
         let Some(shape) = a.result_shape(&b) else {
             bail!(
@@ -281,39 +279,6 @@ impl Vm {
         } else {
             bail!("Stack underflow")
         }
-    }
-
-    /// Pop arguments for monadic op using shift value if available.
-    fn pop_monadic(&mut self) -> Result<Array> {
-        if self.shift_2.is_some() {
-            bail!("Monadic operation cannot use two shift values");
-        }
-        if let Some(n) = self.shift_1 {
-            self.pop_at(n)
-        } else {
-            self.pop()
-        }
-    }
-
-    /// Pop arguments for dyadic op using shift value if available.
-    fn pop_dyadic(&mut self) -> Result<(Array, Array)> {
-        // This gets tricky, both values refer to the stack before any pops,
-        // and might even refer to the same value.
-        let p1 = self.shift_1.unwrap_or(1);
-        let p2 = self.shift_2.unwrap_or(0);
-
-        let a = self.stack_nth(p1)?.clone();
-        let b = self.stack_nth(p2)?.clone();
-
-        // Pop the higher first so we don't invalidate the lower index.
-        self.pop_at(p1.max(p2))?;
-        // Check that they are actually two different values, if they're the
-        // same we only need to remove it once.
-        if p1 != p2 {
-            self.pop_at(p1.min(p2))?;
-        }
-
-        Ok((a, b))
     }
 
     fn stack_nth(&self, i: usize) -> Result<&Array> {
@@ -365,32 +330,13 @@ enum Operation {
     ImplodeStack,
     /// Insert column from above into stack.
     InsertColumn,
-    /// Shift first (deeper in the stack) argument of operation.
-    Shift1(usize, Box<Operation>),
-    /// Shift both arguments of operation.
-    Shift2(usize, usize, Box<Operation>),
-}
-
-fn operation(s: &str) -> Result<(Operation, &str)> {
-    use Operation::*;
-
-    let (inner, rest) = inner_operation(s)?;
-
-    // See if we have indexing digits after the operation.
-    if let Ok((p1, rest)) = parse::subscript_digit(rest) {
-        if let Ok((p2, rest)) = parse::subscript_digit(rest) {
-            Ok((Shift2(p1, p2, Box::new(inner)), rest))
-        } else {
-            Ok((Shift1(p1, Box::new(inner)), rest))
-        }
-    } else {
-        Ok((inner, rest))
-    }
+    /// Pop named stack indices and push them in in the given pattern.
+    Rerrange(Vec<usize>),
 }
 
 /// Parse the next operation from input, simple ones are usually one
 /// character, modifiers create multi-char operations.
-fn inner_operation(s: &str) -> Result<(Operation, &str)> {
+fn operation(s: &str) -> Result<(Operation, &str)> {
     use Operation::*;
 
     let Some(c) = s.chars().next() else {
@@ -408,7 +354,6 @@ fn inner_operation(s: &str) -> Result<(Operation, &str)> {
         return Ok((Number(n), rest));
     }
 
-    // Rewrite the above as a match statement:
     match c {
         c if c.is_ascii_alphabetic() => Ok((Var(c), rest)),
         '→' => {
@@ -428,6 +373,25 @@ fn inner_operation(s: &str) -> Result<(Operation, &str)> {
         }
         ']' => Ok((ImplodeStack, rest)),
         '⇓' => Ok((InsertColumn, rest)),
+        '.' => {
+            // Rearrange operation, read subsequent subscripts as stack
+            // indices.
+            let mut indices = Vec::new();
+            let mut rest = rest;
+            while let Ok((n, r)) = parse::subscript_digit(rest) {
+                if n == 0 {
+                    bail!("Stack indices are 1-based, cannot use 0");
+                }
+                indices.push(n - 1);
+                rest = r;
+            }
+            if indices.is_empty() {
+                // Default behavior is to duplicate the top item.
+                indices.push(0);
+                indices.push(0);
+            }
+            Ok((Rerrange(indices), rest))
+        }
         // Anything we don't know and can't rule off with blanket rules is assumed
         // to be a function call, the intepreter can figure it out.
         _ => Ok((F(c), rest)),
