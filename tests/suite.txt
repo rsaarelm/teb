@@ -109,3 +109,11 @@ xyzzy  plugh
 500  ,°ₑ₁₀
 
 500  2.70,°ₑ₁₀
+# Comment string
+- - -
+1 2 ,√ one
+3 4 , two
+
+-  -  -
+1  2  1.41,√  one
+3  4  2,      two

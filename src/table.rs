@@ -72,7 +72,7 @@ impl Table {
 
             for (i, (&a, &b)) in word_starts
                 .iter()
-                .chain(Some(&line.len()))
+                .chain(Some(&line.chars().count()))
                 .tuple_windows()
                 .enumerate()
             {
@@ -124,11 +124,11 @@ impl Table {
     /// Width of the data-bearing columns. Ignores the potential last right
     /// column which can only contain text data.
     pub fn data_width(&self) -> usize {
-        self.cells.iter().map(|c| c.len()).min().unwrap_or(0)
+        self.cells.iter().map(|row| row.len()).min().unwrap_or(0)
     }
 
     pub fn rows(&self) -> impl Iterator<Item = &[Cell]> + '_ {
-        self.cells.iter().map(|r| r.as_slice())
+        self.cells.iter().map(|row| row.as_slice())
     }
 
     pub fn clear_output(&mut self, row: usize, col: usize) {
@@ -202,7 +202,7 @@ impl Display for Table {
         let column_widths = (0..columns)
             .map(|i| {
                 self.column(i)
-                    .map(|c| c.column_indent(left_extents[i]) + c.len())
+                    .map(|c| c.column_indent(left_extents[i]) + c.chars().count())
                     .max()
                     .unwrap_or(0)
                     + 2 // The 2-space gap between columns
@@ -241,7 +241,7 @@ impl Display for Table {
 
                 write!(f, "{c}")?;
 
-                let right_pad = column_widths[i] - indent - c.len();
+                let right_pad = column_widths[i] - indent - c.chars().count();
 
                 // Right-padding and space between columns.
                 if i < row.len() - 1 {

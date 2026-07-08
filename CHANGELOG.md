@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Removed ubiquitous subscript indexing, now there's a dedicated `.` operator for rearranging the stack.
 
+### Fixed
+- Column width determination was using byte counts instead of character counts and would break with UTF-8 multi-byte characters.
+
 ## [0.1.0] - 2026-07-05
 Initial release
 
