@@ -83,12 +83,15 @@ Use scientific notation in the input cells and output will also use it.
 Text blocks separated by an empty line are treated as separate tables in terms of formatting and column operations.
 Assigned variables will persist to lower tables when running `teb` over multiple tables though.
 
+You can add freeform comment text after the last column shared by every row, this text will not be formatted or evaluated.
+In the main table, whitespace is a column separator, so if you want a column to contain text phrases you need to use underscores in place of spaces.
+
 ```
 --      -
 2.99e8  ,→c  speed of light
 
 --          mass(kg)  yield(J)
-Little_Boy  4.4e3        6e13        Historical bombs for reference
+Little_Boy  4.4e3        6e13      Historical bombs for reference
 Tsar_Bomba   27e3        2e17
 -           -         -
 Mark_1        2e0     1.79e17,c²×
