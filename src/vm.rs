@@ -192,6 +192,14 @@ impl Vm {
             F('√') => {
                 self.monadic_pervasive(|x| x.sqrt())?;
             }
+            // a bⁿ, raise a to b:th power
+            F('ⁿ') => {
+                self.dyadic_pervasive(|x, y| x.powf(y))?;
+            }
+            // Reciprocal
+            F('⨪') => {
+                self.monadic_pervasive(|x| 1.0 / x)?
+            }
             F('⌊') => {
                 self.monadic_pervasive(|x| x.floor())?;
             }
@@ -367,6 +375,9 @@ impl Operation {
 
             F('²') => Ok(F('√')),
             F('√') => Ok(F('²')),
+
+            // TODO F('ⁿ'), turn to logarithm, make Log's argument Option so
+            // it can handle specified and unspecified ones?
 
             Log(base) => Ok(Exp(*base)),
             Exp(base) => Ok(Log(*base)),
