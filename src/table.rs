@@ -72,7 +72,7 @@ impl Table {
 
             for (i, (&a, &b)) in word_starts
                 .iter()
-                .chain(Some(&line.chars().count()))
+                .chain(Some(&line.len()))
                 .tuple_windows()
                 .enumerate()
             {
