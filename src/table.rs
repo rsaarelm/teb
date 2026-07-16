@@ -299,7 +299,7 @@ impl Cell {
     /// numeric value.
     fn number_part(&self) -> &str {
         if let Some(formula) = &self.formula {
-            let len = formula.len() + 1; // +1 for the separator comma
+            let len = formula.len() + 1; // +1 for the separator marker
             &self.text[..self.text.len() - len]
         } else if self.input.is_some() {
             &self.text
@@ -352,7 +352,7 @@ impl Cell {
         let Some(f) = &self.formula else {
             panic!("Trying to set output to a non-formula cell.");
         };
-        self.text = format!("{s},{f}");
+        self.text = format!("{s}<{f}");
     }
 }
 
@@ -376,7 +376,7 @@ impl FromStr for Cell {
         }
 
         // Formula with optional number value before it.
-        if let Some((val, form)) = text.split_once(',') {
+        if let Some((val, form)) = text.split_once('<') {
             if !val.is_empty() {
                 // Valid prefixes for a formula are a parseable float or the
                 // marker for a non-printable array value.
