@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Exponential operator, inverse modifier and logarithm using exponential's inverse.
+- Raise to power operator, reciprocal operator
 
 ### Changed
+- Formula marker is now `<` instead of `,`.
 - Removed ubiquitous subscript indexing, now there's a dedicated `.` operator for rearranging the stack.
 
 ### Fixed
