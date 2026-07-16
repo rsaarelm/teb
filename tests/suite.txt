@@ -117,3 +117,7 @@ xyzzy  plugh
 -  -  -
 1  2  1.41,√  one
 3  4  2,      two
+# Make sure you don't take values to the right of formula
+16 ,16+ 2
+
+16  32,16+  2

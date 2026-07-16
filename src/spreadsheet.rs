@@ -45,6 +45,7 @@ impl Spreadsheet {
     fn eval_at(&self, vm: &mut Vm, i: usize, j: usize, formula: &str) -> Result<Option<Array>> {
         let left_vals = self.cells[i]
             .iter()
+            .take(j)
             .filter_map(Cell::value)
             .cloned()
             .collect::<Vec<_>>();
