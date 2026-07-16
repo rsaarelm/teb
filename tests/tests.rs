@@ -10,8 +10,8 @@ static SUITE: LazyLock<Vec<String>> = LazyLock::new(|| {
     let mut ret = vec![String::new()];
     for line in input.lines() {
         let line = line.trim_end();
-        // Empty lines separate inputs.
-        if line.is_empty() || line.starts_with('#') {
+        // Empty lines and comments separate inputs.
+        if line.is_empty() || line == "--" || line.starts_with("-- ") {
             ret.push(String::new());
             continue;
         }

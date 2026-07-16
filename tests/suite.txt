@@ -15,15 +15,15 @@ xyzzy  plugh
 
  1.23e42  5.13e3
 42.68e13  6.72e12
-# Simple formulas
+-- Simple formulas
 1 2 ,+
 
 1  2  3,+
-# Stack collapsing
+-- Stack collapsing
 1 2 3 4 ,]/+
 
 1  2  3  4  10,]/+
-# Mean calculation
+-- Mean calculation
 1 2 3 4 ,]⊃/+#%
 
 1  2  3  4  2.5,]⊃/+#%
@@ -39,7 +39,7 @@ xyzzy  plugh
 3
 4
 2.5,⇓⊃/+#%
-# First of array
+-- First of array
 5 ,⊢
 
 5  5,⊢
@@ -53,7 +53,7 @@ xyzzy  plugh
 2
 3
 1,⇓⊢
-# Last of array
+-- Last of array
 1
 2
 3
@@ -63,11 +63,11 @@ xyzzy  plugh
 2
 3
 3,⇓⊣
-# Comma-separated numeric literals in formula
+-- Comma-separated numeric literals in formula
 0 ,5,6.0e0+
 
 0  11,5,6.0e0+
-# Empty formulas copy above formula down a column
+-- Empty formulas copy above formula down a column
 1 2 ,+
 3 4 ,
 5 6 ,
@@ -75,13 +75,13 @@ xyzzy  plugh
 1  2   3,+
 3  4   7,
 5  6  11,
-# Variable assignment
+-- Variable assignment
 3.14 ,→p
 - ,p
 
 3.14  ,→p
 -     3.14,p
-# Variable assignment in separate table
+-- Variable assignment in separate table
 3.14 ,→p
 %
 1 2 ,p*
@@ -89,7 +89,7 @@ xyzzy  plugh
 3.14  ,→p
 %
 1  2  6.28,p*
-# Subscripts
+-- Subscripts
 1 2 3 4 ,.₂₃%
 
 1  2  3  4  1.5,.₂₃%
@@ -97,7 +97,7 @@ xyzzy  plugh
 5 ,.*
 
 5  25,.*
-# Exponentiation and logarithms
+-- Exponentiation and logarithms
 10 ,ₑ
 
 10  22026.47,ₑ
@@ -109,7 +109,7 @@ xyzzy  plugh
 500  ,°ₑ₁₀
 
 500  2.70,°ₑ₁₀
-# Comment string
+-- Comment string
 - - -
 1 2 ,√ one
 3 4 , two
@@ -117,7 +117,7 @@ xyzzy  plugh
 -  -  -
 1  2  1.41,√  one
 3  4  2,      two
-# Make sure you don't take values to the right of formula
+-- Make sure you don't take values to the right of formula
 16 ,16+ 2
 
 16  32,16+  2
