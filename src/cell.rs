@@ -152,19 +152,22 @@ impl Display for Cell {
 
 /////
 
-#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Format {
-    /// The default formatter, just regular numbers. Eg. 3.14
-    #[default]
-    Real,
+    /// The default formatter, just regular numbers. Eg. 3.14. Has optional
+    /// precision.
+    Real(u8),
     /// Always round to full integers, 3.14 = ~3
     Integer,
     /// Use scientific notation, 3268 = 3.27e3
-    Scientific,
-    /// Hexadecimal, fraction part is truncated. 16.25 = 0x10
-    Hexadecimal,
-    /// Binary, fraction part is truncated. 3.14 = 0b11
-    Binary,
+    // TODO: Precision opt
+    Scientific(u8),
+    /// Hexadecimal, fraction part is truncated. 16.25 = 0x10. Has optional
+    /// zero padding count.
+    Hexadecimal(u8),
+    /// Binary, fraction part is truncated. 3.14 = 0b11. Has optional zero
+    /// padding count.
+    Binary(u8),
     /// Time of day, converted to seconds from midnight, rounded. 3720 = 01:02
     Time,
     /// Time of day in seconds precision, 3730 = 01:02:10
@@ -180,15 +183,45 @@ pub enum Format {
     Timestamp(i32),
 }
 
+impl Default for Format {
+    fn default() -> Self {
+        Format::Real(0)
+    }
+}
+
 impl Format {
     /// Default string that can be used to infer the format from.
     pub fn zero_string(self) -> String {
         match self {
-            Format::Real => "0".to_string(),
+            Format::Real(p) => {
+                if p == 0 {
+                    "0".to_string()
+                } else {
+                    format!("{:.p$}", 0.0, p = p as usize)
+                }
+            }
             Format::Integer => "~0".to_string(),
-            Format::Scientific => "0e0".to_string(),
-            Format::Hexadecimal => "0x0".to_string(),
-            Format::Binary => "0b0".to_string(),
+            Format::Scientific(p) => {
+                if p == 0 {
+                    "0e0".to_string()
+                } else {
+                    format!("{:.p$}e0", "", p = p as usize)
+                }
+            }
+            Format::Hexadecimal(p) => {
+                if p == 0 {
+                    "0x0".to_string()
+                } else {
+                    format!("0x{:0<p$}", "", p = p as usize)
+                }
+            }
+            Format::Binary(p) => {
+                if p == 0 {
+                    "0b0".to_string()
+                } else {
+                    format!("0b{:0<p$}", "", p = p as usize)
+                }
+            }
             Format::Time => "00:00".to_string(),
             Format::TimeSeconds => "00:00:00".to_string(),
             Format::Date => "1970-01-01".to_string(),
@@ -211,15 +244,17 @@ impl Format {
         use Format::*;
 
         match *self {
-            Real => {
+            Real(p) => {
                 // Smart precision printing logic.
 
-                let abs = num.abs();
-                // Figure out the precision, with precision 2 we want 1.234 -> "1.23"
-                // but 0.000234 -> "0.00023".
-                if abs < 1.0 && num != 0.0 {
-                    let leading_zeros = (-abs.log10().floor() as isize - 1).max(0) as usize;
-                    return write!(w, "{num:.p$}", p = leading_zeros + FLOAT_PRECISION);
+                // If we specify a precision, we always get 2.00, but the
+                // default print will drop zeros and give us 2. On the other
+                // hand the default will also give use a long string of
+                // decimals, so just try both and pick the shorter of the two
+                // here.
+
+                if p > 0 {
+                    return write!(w, "{num:.p$}", p = p as usize);
                 }
 
                 let default = format!("{num}");
@@ -231,9 +266,27 @@ impl Format {
                 }
             }
             Integer => write!(w, "~{}", num.round() as i64),
-            Scientific => write!(w, "{num:.p$e}", p = FLOAT_PRECISION),
-            Hexadecimal => write!(w, "0x{:x}", num.trunc() as i32),
-            Binary => write!(w, "0b{:b}", num.trunc() as i32),
+            Scientific(p) => {
+                if p == 0 {
+                    write!(w, "{num:.p$e}", p = FLOAT_PRECISION)
+                } else {
+                    write!(w, "{num:.p$e}", p = p as usize)
+                }
+            }
+            Hexadecimal(p) => {
+                if p == 0 {
+                    write!(w, "0x{:x}", num.trunc() as i32)
+                } else {
+                    write!(w, "0x{:0p$x}", num.trunc() as i32, p = p as usize)
+                }
+            }
+            Binary(p) => {
+                if p == 0 {
+                    write!(w, "0b{:b}", num.trunc() as i32)
+                } else {
+                    write!(w, "0b{:0p$b}", num.trunc() as i32, p = p as usize)
+                }
+            }
             Time => {
                 let t = (num / 60.0).round() as u32;
                 let hours = t / 60;
@@ -279,11 +332,15 @@ impl Format {
 /// ```
 /// use teb::{parse, Format, Value};
 /// for (i, f, o) in [
-///    ("3.14", Format::Real, 3.14),
+///    ("3.14", Format::Real(0), 3.14),  // Precision only registers when it goes above the default 2.
+///    ("3.1415", Format::Real(4), 3.1415),
 ///    ("~3", Format::Integer, 3.0),
-///    ("3.14e2", Format::Scientific, 314.0),
-///    ("0x10", Format::Hexadecimal, 16.0),
-///    ("0b11", Format::Binary, 3.0),
+///    ("3.14e2", Format::Scientific(0), 314.0),
+///    ("3.1415e2", Format::Scientific(4), 314.15),
+///    ("0x10", Format::Hexadecimal(0), 16.0),
+///    ("0x0010", Format::Hexadecimal(4), 16.0),
+///    ("0b11", Format::Binary(0), 3.0),
+///    ("0b0011", Format::Binary(4), 3.0),
 ///    ("01:02", Format::Time, 3720.0),
 ///    ("01:02:10", Format::TimeSeconds, 3730.0),
 ///    ("1970-01-13", Format::Date, 1036800.0),
@@ -415,13 +472,13 @@ impl FromStr for Value {
         // Shorthands you can write in output cells to set the type without having
         // to write the full number.
         match s {
-            "e" | "E" => return Ok(Self::build(Scientific, 0.0, s)),
+            "e" | "E" => return Ok(Self::build(Scientific(0), 0.0, s)),
             "~" => return Ok(Self::build(Integer, 0.0, s)),
             "d" => return Ok(Self::build(Days, 0.0, s)),
             "%" => return Ok(Self::build(Percent, 0.0, s)),
             "Z" => return Ok(Self::build(Timestamp(0), 0.0, s)),
-            "0x" => return Ok(Self::build(Hexadecimal, 0.0, s)),
-            "0b" => return Ok(Self::build(Binary, 0.0, s)),
+            "0x" => return Ok(Self::build(Hexadecimal(0), 0.0, s)),
+            "0b" => return Ok(Self::build(Binary(0), 0.0, s)),
             _ => {}
         }
 
@@ -440,13 +497,37 @@ impl FromStr for Value {
             Ok(Self::build(Integer, num, s))
         } else if let Some((_, num, _)) = regex_captures!(r"^(-?\d+(\.\d*)?[eE][+-]?\d+)$", s) {
             let num = num.parse::<f64>()?;
-            Ok(Self::build(Scientific, num, s))
+
+            let mut p = 0;
+            // Determine precision, count consecutive digits after decimal
+            // dot.
+            if let Some(dot_pos) = s.find('.') {
+                let precision = s[dot_pos + 1..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .count();
+                if precision > FLOAT_PRECISION {
+                    p = precision as u8;
+                }
+            }
+
+            Ok(Self::build(Scientific(p), num, s))
         } else if let Some((_, num)) = regex_captures!(r"^0x([0-9a-fA-F]+)$", s) {
             let num = u64::from_str_radix(num, 16)? as f64;
-            Ok(Self::build(Hexadecimal, num, s))
+            let len = s.chars().count() - 2;
+            if len > 1 && s.contains("x0") {
+                Ok(Self::build(Hexadecimal(len as u8), num, s))
+            } else {
+                Ok(Self::build(Hexadecimal(0), num, s))
+            }
         } else if let Some((_, num)) = regex_captures!(r"^0b([01]+)$", s) {
             let num = u64::from_str_radix(num, 2)? as f64;
-            Ok(Self::build(Binary, num, s))
+            let len = s.chars().count() - 2;
+            if len > 1 && s.contains("b0") {
+                Ok(Self::build(Binary(len as u8), num, s))
+            } else {
+                Ok(Self::build(Binary(0), num, s))
+            }
         } else if let Some((_, h, m, sec)) = regex_captures!(r"^(\d+):([0-5]\d):([0-5]\d)$", s) {
             let hours = h.parse::<f64>()?;
             let minutes = m.parse::<f64>()?;
@@ -480,7 +561,21 @@ impl FromStr for Value {
             Ok(Self::build(Percent, num, s))
         } else if let Some((_, num, _)) = regex_captures!(r"^(-?\d+(\.\d*)?)$", s) {
             let num = num.parse::<f64>()?;
-            Ok(Self::build(Real, num, s))
+
+            let mut p = 0;
+            // Determine precision, count consecutive digits after decimal
+            // dot.
+            if let Some(dot_pos) = s.find('.') {
+                let precision = s[dot_pos + 1..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .count();
+                if precision > FLOAT_PRECISION {
+                    p = precision as u8;
+                }
+            }
+
+            Ok(Self::build(Real(p), num, s))
         } else {
             bail!("No valid formatted number found")
         }
