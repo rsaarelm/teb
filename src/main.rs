@@ -50,9 +50,6 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    // TODO: Construct spreadsheets from tables, evaluate formulas, update
-    // tables.
-
     if cli.in_place {
         if let Some(path) = &cli.input {
             fs::write(path, output)?;

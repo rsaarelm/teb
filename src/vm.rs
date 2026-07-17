@@ -374,8 +374,6 @@ impl Operation {
             F('²') => Ok(F('√')),
             F('√') => Ok(F('²')),
 
-            // TODO F('ⁿ'), turn to logarithm, make Log's argument Option so
-            // it can handle specified and unspecified ones?
             Log(base) => Ok(Exp(*base)),
             Exp(base) => Ok(Log(*base)),
             _ => bail!("Cannot invert operation: '{self:?}'"),
