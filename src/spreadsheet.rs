@@ -43,22 +43,12 @@ impl Spreadsheet {
     }
 
     fn eval_at(&self, vm: &mut Vm, i: usize, j: usize, formula: &str) -> Result<Option<Array>> {
-        let left_vals = self.cells[i]
-            .iter()
-            .take(j)
-            .filter_map(DataCell::value)
-            .cloned()
-            .collect::<Vec<_>>();
-        let top_vals = self
-            .cells
-            .iter()
-            .take(i)
-            .filter_map(|row| row.get(j).and_then(DataCell::value))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        vm.init(left_vals, top_vals);
-        vm.run(formula)
+        let cursor = Cursor {
+            row: i,
+            col: j,
+            sheet: self,
+        };
+        vm.run(&cursor, formula)
     }
 
     fn posns(&self) -> impl Iterator<Item = (usize, usize)> {
@@ -129,5 +119,41 @@ impl DataCell {
             DataCell::Output(Some(value), _) => Some(value),
             _ => None,
         }
+    }
+}
+
+/// Access object for spreadsheet.
+pub struct Cursor<'a> {
+    row: usize,
+    col: usize,
+    sheet: &'a Spreadsheet,
+}
+
+impl<'a> Cursor<'a> {
+    pub fn column_above(&self, offset: usize) -> Vec<Array> {
+        // Return array of values above curret pos, offset to the left by
+        // `offset`.
+
+        if self.col < offset {
+            return Vec::new();
+        }
+
+        let col = self.col - offset;
+        self.sheet
+            .cells
+            .iter()
+            .take(self.row)
+            .filter_map(|row| row.get(col).and_then(DataCell::value))
+            .cloned()
+            .collect()
+    }
+
+    pub fn row_left(&self) -> Vec<Array> {
+        self.sheet.cells[self.row]
+            .iter()
+            .take(self.col)
+            .filter_map(DataCell::value)
+            .cloned()
+            .collect()
     }
 }

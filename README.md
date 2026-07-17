@@ -166,3 +166,26 @@ Bob       84    69       89  48          72.5<
 Carol     68    94       75  79          79<
 Vladimir  45    52       92  95          71<
 ```
+
+### Mean time between failures
+
+We have a system log of times of failure as RFC 3339 timestamps, and we want to find out the mean time between failures.
+Timestamps are one accepted input format, and they resolve as the corresponding Unix time.
+
+The command to pull the column above can be given a subscript to pull a column from further to the left.
+To get the difference between the last two error times, we get the top from the above column to the left (which stops one cell before the current row, just like the column above the input cell, and then subtract it from the current timestamp to the left.
+Format the differences between timestamps to days to keep them readable.
+Then we just use the old mean formula to count the mean interval.
+
+log                   interval
+1990-04-01T10:35:22Z  -
+1990-05-04T13:35:30Z  33d<⇓₁⊣-
+1990-08-05T23:07:10Z  93d<
+1990-10-29T14:28:37Z  85d<
+1990-12-29T05:01:01Z  61d<
+1991-02-28T10:45:51Z  61d<
+1991-03-23T10:00:28Z  23d<
+1991-03-31T07:26:44Z   8d<
+1991-06-06T00:06:37Z  67d<
+1991-06-09T17:25:46Z   4d<
+mtbf:                 48d<⇓⊃/+#÷

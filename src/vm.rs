@@ -3,7 +3,7 @@ use std::{
     f64,
 };
 
-use crate::{Array, parse};
+use crate::{Array, Cursor, parse};
 use anyhow::{Result, bail};
 
 #[derive(Clone, Default)]
@@ -14,38 +14,30 @@ pub struct Vm {
     input_stack: Vec<Array>,
     /// Stack used for intermediate calculations and the return value.
     work_stack: Vec<Array>,
-
-    // This should maybe refer to the spreadsheet as a whole for operations
-    // like column-pulling?
-    /// Column on the spreadsheet above the current cell, can be pulled into
-    /// stack as an array using a special operation.
-    above_column: Vec<Array>,
 }
 
 impl Vm {
-    pub fn init(&mut self, input_stack: Vec<Array>, above_column: Vec<Array>) {
-        self.work_stack.clear();
-        self.input_stack = input_stack;
-        self.above_column = above_column;
-    }
-
     /// Make a clean copy that shares bindings.
     fn spawn(&self) -> Self {
         let mut ret = self.clone();
-        ret.init(Default::default(), Default::default());
+        ret.input_stack.clear();
+        ret.work_stack.clear();
         ret
     }
 
-    pub fn run(&mut self, mut formula: &str) -> Result<Option<Array>> {
+    pub fn run(&mut self, cur: &Cursor, mut formula: &str) -> Result<Option<Array>> {
         debug_assert!(
             formula.chars().all(|c| !c.is_whitespace()),
             "Formula should not contain whitespace"
         );
 
+        self.work_stack.clear();
+        self.input_stack = cur.row_left();
+
         while !formula.is_empty() {
             let (op, rest) = operation(formula)?;
             formula = rest;
-            self.eval(op)?;
+            self.eval(cur, op)?;
         }
 
         // Only return values from the work stack. If there's only input stack
@@ -58,7 +50,7 @@ impl Vm {
         }
     }
 
-    fn eval(&mut self, op: Operation) -> Result<()> {
+    fn eval(&mut self, cur: &Cursor, op: Operation) -> Result<()> {
         use Operation::*;
 
         match op {
@@ -88,11 +80,11 @@ impl Vm {
                 // XXX: Cloning the full VM is pretty expensive, there are
                 // probably cleverer ways to do this.
                 let mut scratch = self.clone();
-                scratch.eval(*op2)?;
+                scratch.eval(cur, *op2)?;
                 // XXX: Is it okay to always grab just one output?
                 let a = scratch.pop()?;
 
-                self.eval(*op1)?;
+                self.eval(cur, *op1)?;
                 self.push(a);
             }
             Reduce(op) => {
@@ -107,7 +99,7 @@ impl Vm {
                 }
                 while scratch.work_stack.len() > 1 {
                     let old_len = scratch.work_stack.len();
-                    scratch.eval(*op.clone())?;
+                    scratch.eval(cur, *op.clone())?;
                     if scratch.work_stack.len() >= old_len {
                         bail!("Reduce operation did not reduce stack size");
                     }
@@ -131,16 +123,18 @@ impl Vm {
                 self.push(ret);
             }
 
-            InsertColumn => {
-                let Some(top) = self.above_column.last() else {
+            InsertColumn(offset) => {
+                let column = cur.column_above(offset);
+
+                let Some(top) = column.last() else {
                     self.push(Array::default());
                     return Ok(());
                 };
                 // Above-column values must all have same shape.
-                if !self.above_column.iter().all(|a| a.shape() == top.shape()) {
+                if !column.iter().all(|a| a.shape() == top.shape()) {
                     bail!("Cannot insert column, values have different shapes.",);
                 }
-                let ret = Array::from_iter(self.above_column.iter());
+                let ret = Array::from_iter(column.iter());
                 self.push(ret);
             }
 
@@ -358,8 +352,9 @@ enum Operation {
     Fork(Box<Operation>, Box<Operation>),
     /// Turn stack into array
     ImplodeStack,
-    /// Insert column from above into stack.
-    InsertColumn,
+    /// Insert column from above into stack. You can displace to the left by
+    /// offset.
+    InsertColumn(usize),
     /// Pop named stack indices and push them in in the given pattern.
     Rerrange(Vec<usize>),
 }
@@ -419,7 +414,13 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
             Ok((Fork(Box::new(op1), Box::new(op2)), rest))
         }
         ']' => Ok((ImplodeStack, rest)),
-        '⇓' => Ok((InsertColumn, rest)),
+        '⇓' => {
+            if let Ok((subscript, rest)) = parse::subscript_number(rest) {
+                Ok((InsertColumn(subscript as usize), rest))
+            } else {
+                Ok((InsertColumn(0), rest))
+            }
+        }
         '.' => {
             // Rearrange operation, read subsequent subscripts as stack
             // indices.
