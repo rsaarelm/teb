@@ -180,6 +180,10 @@ impl Vm {
             F('÷') | F('%') => {
                 self.dyadic_pervasive(|x, y| x / y)?;
             }
+            // Negate
+            F('¯') => {
+                self.monadic_pervasive(|x| -x)?;
+            }
             F('²') => {
                 self.monadic_pervasive(|x| x * x)?;
             }
@@ -221,7 +225,7 @@ impl Vm {
                     if let Some(first) = cells.first() {
                         self.push(first.to_owned());
                     } else {
-                        bail!("Cannot take first of empty array");
+                        bail!("first: Cannot take first of empty array");
                     }
                 }
             }
@@ -235,9 +239,49 @@ impl Vm {
                     if let Some(first) = cells.last() {
                         self.push(first.to_owned());
                     } else {
-                        bail!("Cannot take last of empty array");
+                        bail!("last: Cannot take last of empty array");
                     }
                 }
+            }
+            // Reverse array
+            F('⇌') => {
+                let a = self.pop()?;
+                if a.is_scalar() {
+                    self.push(a);
+                } else {
+                    let mut cells = a.explode();
+                    cells.reverse();
+                    self.push(cells.iter().collect());
+                }
+            }
+
+            // Take n rows of array
+            F('↙') => {
+                let n = self.pop()?;
+                let a = self.pop()?;
+
+                let Some(n) = n.as_scalar().map(|n| n as i32) else {
+                    // It can probably be given semantics for array args
+                    // too...
+                    bail!("take: Operation requires a scalar argument");
+                };
+                if n.abs() as usize > a.length() {
+                    bail!("take: Not enough elements");
+                }
+                if a.is_scalar() {
+                    bail!("take: Cannot take rows of a scalar");
+                }
+
+                let rows = a.explode();
+
+                let a = if n < 0 {
+                    // take last abs(n) rows as one array
+                    Array::from_iter(rows.iter().skip(rows.len() - n.abs() as usize))
+                } else {
+                    // take first n rows as one array
+                    Array::from_iter(rows.iter().take(n as usize))
+                };
+                self.push(a);
             }
 
             F(c) => {
