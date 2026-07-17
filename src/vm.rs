@@ -180,10 +180,10 @@ impl Vm {
             F('-') => {
                 self.dyadic_pervasive(|x, y| x - y)?;
             }
-            F('*') | F('×') => {
+            F('×') | F('*') => {
                 self.dyadic_pervasive(|x, y| x * y)?;
             }
-            F('%') | F('÷') => {
+            F('÷') | F('%') => {
                 self.dyadic_pervasive(|x, y| x / y)?;
             }
             F('²') => {
@@ -208,7 +208,7 @@ impl Vm {
                 self.monadic_pervasive(|x| x.ceil())?;
             }
             // Array length
-            F('#') | F('⧻') => {
+            F('⧻') | F('#') => {
                 let a = self.pop()?;
                 self.push((a.length() as f64).into());
             }
