@@ -1,7 +1,7 @@
 mod array;
 pub use array::Array;
-mod formatted_scalar;
-pub use formatted_scalar::{Format, FormattedScalar};
+mod cell;
+pub use cell::{Cell, Format, Value};
 pub mod parse;
 mod spreadsheet;
 pub use spreadsheet::Spreadsheet;

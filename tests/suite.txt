@@ -79,7 +79,7 @@ xyzzy  plugh
 3.14 <→p
 - <p
 
-3.14  <→p
+3.14   <→p
 -     3.14<p
 -- Variable assignment in separate table
 3.14 <→p
@@ -121,3 +121,39 @@ xyzzy  plugh
 16 <16+ 2
 
 16  32<16+  2
+-- Formatters
+scientific 123456 e<.
+rounded 3.14159 ~<.
+percent 1 %<3÷
+to_timestamp 1000000000 Z<.
+to_unixtime 2006-01-02T15:04:05-07:00 0<.
+hexadecimal 65535 0x<.
+binary 255 0b<.
+time_of_day 12345 00:00<.
+- 12345 00:00:00<.
+2026-06-01 2026-01-01 d<- Subtract dates, format output as days
+2026-01-01 100d 1970-01-01<+ Add days to date, format output as date
+
+scientific                       123456                        1.23e5<.
+rounded                               3.14159                    ~3<.
+percent                               1                          33%<3÷
+to_timestamp                 1000000000        2001-09-09T01:46:40Z<.
+to_unixtime   2006-01-02T15:04:05-07:00                  1136239445<.
+hexadecimal                       65535                      0xffff<.
+binary                              255                  0b11111111<.
+time_of_day                       12345                       03:26<.
+-                                 12345                    03:25:45<.
+2026-06-01                   2026-01-01                         151d<-   Subtract dates, format output as days
+2026-01-01                          100d                 2026-04-11<+    Add days to date, format output as date
+-- Formatting propagates down column.
+0 <2+ 1 %<3÷
+1 < 2 <
+2 < 3 <
+4 < 5 <2×
+6 < 7 <
+
+0  2<2+  1   33%<3÷
+1  3<    2   67%<
+2  4<    3  100%<
+4  6<    5   10<2×
+6  8<    7   14<
