@@ -38,6 +38,8 @@ flour    1.2   1        1.2<
 
 Formulas are written after the angle brackets.
 Formulas use reverse Polish notations and take values on the row they're on as stack arguments.
+The arithmetic operators are `+`, `-`, `×` and `÷`.
+Unicode symbols are used unapologetically, since it's imperative to get the formulas as compact as possible to fit them in the table layout without too much disruption.
 An empty left angle bracket will reuse the last formula seen on the same column.
 
 You can operate on the column above a formula by pulling it in as an array value using the `⇓` operation.
@@ -47,6 +49,7 @@ The reduce modifier `/` recursively applies its operand to all array values, so 
 
 Add transaction to the previous balance above on each row.
 ∘ is the identity function that just repeats the last value.
+You need to have something in a formula even if you just want to repeat the top input stack value, since the default stack values built from the table row before the formula starts executing never qualify as cell output.
 
 ```
 transaction     amount  balance
@@ -76,6 +79,18 @@ Vladimir  1.92       230         62.39<
 -         -          Avg:        32.65<⇓⊃/+#÷
 ```
 
+### Grade averages
+
+To compute over the whole row, use `]` to collapse the stack elements into a single array value.
+
+```
+---       math  physics  cs  literature  avg
+Alice     92    74       83  34          70.75<]⊃/+#÷
+Bob       84    69       89  48          72.5<
+Carol     68    94       75  79          79<
+Vladimir  45    52       92  95          71<
+```
+
 ### Antimatter bomb yields
 
 You can assign constants in a separate table above the main one and they'll persist.
@@ -86,7 +101,7 @@ Assigned variables will persist to lower tables when running `teb` over multiple
 You can use special formats by typing cells according to recognized special syntaxes.
 You can tell an output cell to output using a given syntax by writing it a dummy value in the format you want.
 If you use large numbers, you want to use scientific notation.
-Write `0e0` or just `e` in your output cell to request that the output is printed in scientific notation.
+Write `0e0` or just `e` as the value in your output cell to request that the output is printed in scientific notation.
 Cells with just a `<` will inherit both the formula and the formatting from the output cell above them.
 
 You can add freeform comment text after the last column shared by every row, this text will not be formatted or evaluated.
@@ -120,52 +135,38 @@ Mark_1          2     1.79e17<c²×
 Mark_2          4.5   4.02e17<
 ```
 
-### Project plan
+### Project estimation
 
 A project plan will have a start date and tasks with estimated durations, the spreadsheet will calculate the estimated finish day.
 For this we need dates, formatted like `1970-12-31` and day durations, formatted with a 'd' suffix like `12d`
 Time and date formatted values are all treated internally as seconds.
 Date values will turn into seconds from the Unix epoch.
 
-The output cells start with dummy values.
+Input, the first date output cell has a dummy date to set output column format to dates:
 
 ```
-start_date 2026-01-20 <→a
-
-task est. total completed
-req_gather 12d d<. 1970-01-01<a+
-design 15d d<⇓⊣+ <
-assembly 24d < <
-calibration 4d < <
-final_check 2d < <
+task est. completed
+start_date - - 2026-01-20
+req_gather 12d 1970-01-01<⇓⊣+
+design 15d <
+assembly 24d <
+calibration 4d <
+final_check 2d <
 ```
 
 Running this through `teb` we get:
 
 ```
-start_date  2026-01-20  <→a
-
-task         est.  total    completed
-req_gather   12d   12d<.    2026-02-01<a+
-design       15d   27d<⇓⊣+  2026-02-16<
-assembly     24d   51d<     2026-03-12<
-calibration   4d   55d<     2026-03-16<
-final_check   2d   57d<     2026-03-18<
+task         est.  completed
+start_date   -     2026-01-20
+req_gather   12d   2026-02-01<⇓⊣+
+design       15d   2026-02-16<
+assembly     24d   2026-03-12<
+calibration   4d   2026-03-16<
+final_check   2d   2026-03-18<
 ```
 
-The example doesn't account for people not working on weekends, but you can just multiple all your time estimates by 1.5 when entering them to correct for this.
-
-### Grade averages
-
-To compute over the whole row, use `]` to collapse the stack elements into a single array value.
-
-```
----       math  physics  cs  literature  avg
-Alice     92    74       83  34          70.75<]⊃/+#÷
-Bob       84    69       89  48          72.5<
-Carol     68    94       75  79          79<
-Vladimir  45    52       92  95          71<
-```
+The example doesn't account for people not working on weekends, just multiple all your time estimates by 1.5 when entering them to correct for this.
 
 ### Mean time between failures
 
@@ -173,10 +174,11 @@ We have a system log of times of failure as RFC 3339 timestamps, and we want to 
 Timestamps are one accepted input format, and they resolve as the corresponding Unix time.
 
 The command to pull the column above can be given a subscript to pull a column from further to the left.
-To get the difference between the last two error times, we get the top from the above column to the left (which stops one cell before the current row, just like the column above the input cell, and then subtract it from the current timestamp to the left.
+To get the difference between the last two error times, we get the top from the above column to the left (which stops one cell before the current row, just like the column above the input cell), and then subtract it from the current timestamp to the left.
 Format the differences between timestamps to days to keep them readable.
-Then we just use the old mean formula to count the mean interval.
+Then we use the familiar mean formula to count the mean interval.
 
+```
 log                   interval
 1990-04-01T10:35:22Z  -
 1990-05-04T13:35:30Z  33d<⇓₁⊣-
@@ -189,3 +191,39 @@ log                   interval
 1991-06-06T00:06:37Z  67d<
 1991-06-09T17:25:46Z   4d<
 mtbf:                 48d<⇓⊃/+#÷
+```
+
+### Linear RGB to sRGB conversion
+
+Computer monitors use an artificial color space called [sRGB](https://en.wikipedia.org/wiki/SRGB), whose luminance values do not correspond to physical brightness in an obvious way.
+We call the physically based color space "linear RGB" to distinguish it from sRGB.
+The formula to convert physical RGB luminance *a* to sRGB *s* is
+
+```
+s(a) = 12.92a                  if a ≤ 0.0031308
+       1.055a^{1/2.4} − 0.055  otherwise
+```
+
+We want a grayscale color ramp that has simple fractions of the linear RGB range as its values, because these will produce clean [Bayer dithering](https://en.wikipedia.org/wiki/Ordered_dithering) patterns.
+Instead of encoding the conditional in the formula, we just switch formulas in the table once we're past the threshold.
+All our values end up using the exponential range anyway.
+Operator `⨪` is a reciprocal and is used to turn 2.4 into 1 / 2.4.
+Operator `ⁿ` raises the second stack value to the power of the first stack value.
+
+Hex formatting can be required by using `0x0` for the value and binary formatting using `0b0`.
+Hex or binary numbers can be assigned padding by having the initial value have heading zeroes.
+Initial output formatter `0x0000` will specify four digit padding, so subsequent outputs will look like `0x00a0` rather than `0xa0`.
+In this case we want bytes for the sRGB color so we use `0x00` as the initial formatter value.
+
+```
+gray  linear     sRGB-float               sRGB-byte
+ 0    0          0<12.92×                 0x00<255×⌊  Black
+-     0.0031307  0.040<                   -
+-     0.0031308  0.040<2.4⨪ⁿ1.055×0.055-  0x0a<       threshold for exponential formula
+ 1    0.062<16÷  0.28<                    0x46<
+ 2    0.12<      0.39<                    0x63<
+ 4    0.25<      0.54<                    0x88<
+ 8    0.5<       0.74<                    0xbb<       Linear middle gray
+12    0.75<      0.88<                    0xe0<
+16    1<         1.0                      0xff<       White
+```
