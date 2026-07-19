@@ -212,6 +212,10 @@ impl Vm {
             }
             // Identity
             F('∘') => {
+                // NB. This isn't equivalent to doing nothing since the
+                // pop-push might be moving the value from the input stack
+                // (not shown as formula result) to the work stack (shown as
+                // result).
                 let a = self.pop()?;
                 self.push(a);
             }
