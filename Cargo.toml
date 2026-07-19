@@ -11,8 +11,10 @@ resolver = "2"
 
 [dependencies]
 anyhow = "1"
+chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
 itertools = "0.15"
+lazy-regex = "3"
 lexical-core = "1"
 
 [dev-dependencies]

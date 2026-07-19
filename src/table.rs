@@ -1,11 +1,9 @@
-use std::{fmt::Display, iter, ops::Deref, str::FromStr};
+use std::{fmt::Display, iter};
 
 use anyhow::{Result, bail};
 use itertools::Itertools;
 
-use crate::{Array, Spreadsheet, Vm, parse};
-
-const FLOAT_PRECISION: usize = 2;
+use crate::{Array, Cell, Spreadsheet, Vm, parse};
 
 // This is the textual table representation, see Spreadsheet for the semantic
 // representation.
@@ -79,7 +77,7 @@ impl Table {
                 if i < columns {
                     // Keep pushing individual words while we have columns.
                     let cell = if parse_numbers {
-                        line[a..b].parse()?
+                        line[a..b].trim_end().parse()?
                     } else {
                         // If number parsing is disabled, all cells are forced
                         // to be text.
@@ -97,6 +95,22 @@ impl Table {
             // Sanity-check our earlier column calculation.
             assert!(columns <= row.len() && row.len() <= columns + 1);
             table.cells.push(row);
+        }
+
+        // Propagate formulas and the accompanying output formats down the
+        // column to empty output cells.
+
+        // Propagate output formats down the columns to empty output cells.
+        let rows = table.cells.len();
+        for col in 0..columns {
+            let mut last_formula_cell = None;
+            for row in 0..rows {
+                if table.cells[row][col].has_formula() {
+                    last_formula_cell = Some(table.cells[row][col].clone());
+                } else if let Some(last_formula_cell) = last_formula_cell.as_ref() {
+                    table.cells[row][col].inherit_from(last_formula_cell)
+                }
+            }
         }
 
         Ok(table)
@@ -124,59 +138,23 @@ impl Table {
     /// Width of the data-bearing columns. Ignores the potential last right
     /// column which can only contain text data.
     pub fn data_width(&self) -> usize {
-        self.cells.iter().map(|c| c.len()).min().unwrap_or(0)
+        self.cells.iter().map(|row| row.len()).min().unwrap_or(0)
     }
 
     pub fn rows(&self) -> impl Iterator<Item = &[Cell]> + '_ {
-        self.cells.iter().map(|r| r.as_slice())
+        self.cells.iter().map(|row| row.as_slice())
     }
 
     pub fn clear_output(&mut self, row: usize, col: usize) {
-        let cell = &mut self.cells[row][col];
-        if cell.is_formula_cell() {
-            cell.set_output("");
-        }
+        self.cells[row][col].set_output_text("");
     }
 
-    /// Assign an output value to a cell, doing fancy smart formatting.
+    /// Assign an output value to a cell.
     pub fn assign(&mut self, row: usize, col: usize, value: &Array) {
-        // Infect this cell with scientific notation if we see potential input
-        // cells using it.
-        let mut use_scientific = self
-            .to_the_left(row, col)
-            .any(|c| c.uses_scientific_notation());
-        use_scientific |= self.above(row, col).any(|c| c.uses_scientific_notation());
-
-        let cell = &mut self.cells[row][col];
-
-        let Some(num) = value.as_scalar() else {
-            // Non-printable value, set the marker and continue.
-            cell.set_output("▯");
-            return;
-        };
-
-        if use_scientific {
-            cell.set_output(format!("{num:.p$e}", p = FLOAT_PRECISION));
-            return;
-        }
-
-        let abs = num.abs();
-        // Figure out the precision, with precision 2 we want 1.234 -> "1.23"
-        // but 0.000234 -> "0.00023".
-        if abs < 1.0 && num != 0.0 {
-            let leading_zeros = (-abs.log10().floor() as isize - 1).max(0) as usize;
-            cell.set_output(format!("{num:.p$}", p = leading_zeros + FLOAT_PRECISION));
-            return;
-        }
-
-        let scale = 10f64.powi(FLOAT_PRECISION as i32);
-        let rounded = (abs * scale).round();
-        let all_decimal_digits_are_zero = rounded.rem_euclid(scale) == 0.0;
-
-        if all_decimal_digits_are_zero {
-            cell.set_output(format!("{}", num.trunc()));
+        if let Some(num) = value.as_scalar() {
+            self.cells[row][col].assign_output(num);
         } else {
-            cell.set_output(format!("{num:.p$}", p = FLOAT_PRECISION));
+            self.cells[row][col].set_output_text("▯");
         }
     }
 }
@@ -194,7 +172,7 @@ impl Display for Table {
         let left_extents = (0..columns)
             .map(|i| {
                 self.column(i)
-                    .map(|c| c.left_extension())
+                    .filter_map(|c| c.left_extension().map(|e| e.chars().count()))
                     .max()
                     .unwrap_or(0)
             })
@@ -204,7 +182,7 @@ impl Display for Table {
         let column_widths = (0..columns)
             .map(|i| {
                 self.column(i)
-                    .map(|c| c.column_indent(left_extents[i]) + c.len())
+                    .map(|c| c.column_indent(left_extents[i]) + c.chars().count())
                     .max()
                     .unwrap_or(0)
                     + 2 // The 2-space gap between columns
@@ -243,7 +221,7 @@ impl Display for Table {
 
                 write!(f, "{c}")?;
 
-                let right_pad = column_widths[i] - indent - c.len();
+                let right_pad = column_widths[i] - indent - c.chars().count();
 
                 // Right-padding and space between columns.
                 if i < row.len() - 1 {
@@ -255,185 +233,5 @@ impl Display for Table {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Cell {
-    /// Always contains complete text of the cell. Must not be empty. Must not
-    /// contain whitespace.
-    text: String,
-    /// Input data from a numeric non-formula cell.
-    ///
-    /// Formula cells produce output, so input values are not used for them.
-    input: Option<f64>,
-    /// Spreadsheet formula string, if applicable.
-    formula: Option<String>,
-}
-
-impl Cell {
-    /// Force a text cell, even if the string looks like a number or formula.
-    pub fn text(s: impl Into<String>) -> Self {
-        let text = s.into();
-        assert!(!text.is_empty(), "Cell: Text is empty");
-        assert!(
-            !text.contains(char::is_whitespace),
-            "Cell: Text contains whitespace"
-        );
-
-        Cell {
-            text,
-            input: None,
-            formula: None,
-        }
-    }
-
-    fn is_numeric(&self) -> bool {
-        self.input.is_some() || self.formula.is_some()
-    }
-
-    pub fn input(&self) -> Option<f64> {
-        self.input
-    }
-
-    pub fn formula(&self) -> Option<&str> {
-        self.formula.as_deref()
-    }
-
-    /// Return part of the cell string that represents an input or output
-    /// number. Empty string if the cell does not contain an acknowledged
-    /// numeric value.
-    fn number_part(&self) -> &str {
-        if let Some(formula) = &self.formula {
-            let len = formula.len() + 1; // +1 for the separator comma
-            &self.text[..self.text.len() - len]
-        } else if self.input.is_some() {
-            &self.text
-        } else {
-            ""
-        }
-    }
-
-    /// How much should this cell be indented when printed to a column with
-    /// the given maximum left extent.
-    fn column_indent(&self, max_left_extent: usize) -> usize {
-        if !self.is_numeric() {
-            return 0;
-        }
-        let left_extent = self.left_extension();
-        assert!(left_extent <= max_left_extent);
-        max_left_extent - left_extent
-    }
-
-    pub fn uses_scientific_notation(&self) -> bool {
-        let num = self.number_part();
-        num.contains('e') || num.contains('E')
-    }
-
-    pub fn is_formula_cell(&self) -> bool {
-        self.formula.is_some()
-    }
-
-    /// Find how much the cell must be shifted to the left so it'll align with
-    /// other numbers at the exponent marker or the decimal point. Returns 0
-    /// for text cells.
-    fn left_extension(&self) -> usize {
-        let num = self.number_part();
-
-        if let Some(pos) = num.find(['e', 'E']) {
-            pos // First try to align by the part before an exponent marker,
-        } else if let Some(pos) = num.find('.') {
-            pos // then by the part before a decimal point,
-        } else {
-            // otherwise use the whole number string length.
-            num.len()
-        }
-    }
-
-    pub fn set_output(&mut self, value: impl ToString) {
-        let s = value.to_string();
-        if s.contains(char::is_whitespace) {
-            panic!("Trying to assign a value with whitespace to a cell.");
-        }
-        let Some(f) = &self.formula else {
-            panic!("Trying to set output to a non-formula cell.");
-        };
-        self.text = format!("{s},{f}");
-    }
-}
-
-impl FromStr for Cell {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        let text = s.trim().to_string();
-        if text.is_empty() {
-            bail!("Cell text can't be empty.");
-        }
-
-        // Only a number.
-        if let Ok(num) = text.parse::<f64>() {
-            let input = Some(num);
-            return Ok(Cell {
-                text,
-                input,
-                formula: None,
-            });
-        }
-
-        // Formula with optional number value before it.
-        if let Some((val, form)) = text.split_once(',') {
-            if !val.is_empty() {
-                // Valid prefixes for a formula are a parseable float or the
-                // marker for a non-printable array value.
-                if val != "▯" && val.parse::<f64>().is_err() {
-                    // A prefix exists but we can't parse it. Assume this was
-                    // actually a misidentified text cell instead of a formula
-                    // cell and return a text cell result.
-                    return Ok(Cell {
-                        text,
-                        input: None,
-                        formula: None,
-                    });
-                };
-            }
-
-            let formula = Some(form.to_string());
-
-            return Ok(Cell {
-                text,
-                input: None,
-                formula,
-            });
-        }
-
-        // Just a text cell.
-        Ok(Cell {
-            text,
-            input: None,
-            formula: None,
-        })
-    }
-}
-
-impl Display for Cell {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.text)
-    }
-}
-
-impl Default for Cell {
-    fn default() -> Self {
-        // Cell text can't be empty so Default needs to use a placeholder
-        // value.
-        Cell::text("-")
-    }
-}
-
-impl Deref for Cell {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.text
     }
 }
