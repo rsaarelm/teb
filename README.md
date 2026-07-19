@@ -227,3 +227,34 @@ gray  linear     sRGB-float               sRGB-byte
 12    0.75<      0.88<                    0xe0<
 16    1<         1.0                      0xff<       White
 ```
+
+### Bootleg Beeminder
+
+[Beeminder](https://www.beeminder.com/) is a system for tracking your progress on quantifiable goals and alerting you if you are performing too poorly on them.
+You can roll your own with Teb, set up the goal as a linear polynomial `y = ax+b` and compare a time series of your recorded tasks to it.
+
+Let's say you set a goal to read at least one book a week.
+The parameters of the goal line are the start date and the reciprocal of the interval you want (one week ie. 7 days).
+
+You're reading books, so each entry corresponds to one book read and you can make your accumulation formula just tick up by one each row.
+
+Finally you set up the error column comparing your progress to the goal line.
+If the error ever goes negative, you've fallen behind on your goal and should punish yourself as you see fit for this shortcoming.
+
+```
+start_date  2026-02-05   <→b
+interval             7d  <⨪→a
+
+date        accum   error
+-           0       -
+2026-02-12  1<⇓⊣1+   0<.₂b-a*-  Catcher in the Rye
+2026-02-18  2<       0.14<      The Great Gatsby
+2026-02-22  3<       0.57<      The Brothers Karamazov
+2026-02-28  4<       0.71<      Blood Meridian
+2026-03-10  5<       0.29<      Gravity's Rainbow
+2026-03-25  6<      -0.86<      Manufacturing Consent (oops! fell of the wagon)
+2026-03-28  7<      -0.29<      The Stranger
+2026-04-01  8<       0.14<      The Silmarillion (back on track!)
+```
+
+Variants where you track a cumulative value that has varying increments, like kilometers run per day, or an absolute value, like body weight, are left as exercise.
