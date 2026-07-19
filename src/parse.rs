@@ -1,6 +1,41 @@
 use anyhow::{Result, bail};
 
-use crate::Table;
+use crate::{Table, Token};
+
+/// Parse a single formula token.
+pub fn token(s: &str) -> Result<(Token, &str)> {
+    todo!()
+}
+
+/// Parse either a group of tokens in parentheses or a single token.
+pub fn subformula(mut s: &str) -> Result<(Vec<Token>, &str)> {
+    if s.is_empty() {
+        bail!("No input");
+    }
+    let mut tokens = Vec::new();
+    if s.chars().next().unwrap() == '(' {
+        // A longer subformula will be enclosed in parens
+        s = &s[1..]; // Skip opening paren.
+        loop {
+            if s.is_empty() {
+                bail!("Unmatched opening paren");
+            }
+            if s.chars().next().unwrap() == ')' {
+                s = &s[1..]; // Skip closing paren.
+                break;
+            }
+            let (t, rest) = token(s)?;
+            tokens.push(t);
+            s = rest;
+        }
+        Ok((tokens, s))
+    } else {
+        // Otherwise read a single token and that's it.
+        let (t, rest) = token(s)?;
+        tokens.push(t);
+        Ok((tokens, rest))
+    }
+}
 
 pub fn subscript_digit(s: &str) -> Result<(usize, &str)> {
     if s.is_empty() {

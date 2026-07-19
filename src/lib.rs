@@ -13,4 +13,5 @@ mod table;
 pub use table::Table;
 
 mod vm;
+pub(crate) use vm::Token;
 pub use vm::Vm;

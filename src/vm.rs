@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
-    f64,
+    f64, str::FromStr,
 };
 
 use crate::{Array, Cursor, parse};
@@ -14,6 +14,74 @@ pub struct Vm {
     input_stack: Vec<Array>,
     /// Stack used for intermediate calculations and the return value.
     work_stack: Vec<Array>,
+}
+
+pub struct Formula(Vec<Token>);
+
+impl FromStr for Formula {
+    type Err = anyhow::Error;
+
+    fn from_str(mut s: &str) -> std::result::Result<Self, Self::Err> {
+        let mut ret = Vec::new();
+        while !s.is_empty() {
+            let (token, rest) = parse::token(s)?;
+            ret.push(token);
+            s = rest;
+        }
+        Ok(Formula(ret))
+    }
+}
+
+pub enum Token {
+    /// Numeric literal, floating point parsing applies, but the token must
+    /// begin with a digit. (You can only represent positive reals,
+    /// use `123¯` to get -123.)
+    Num(f64),
+
+    /// Variable reference. Variables can be lowercase Latin or lowercase
+    /// Greek letters visually distinct from Latin.
+    Var(String),
+
+    /// Assign to variable, `→a`
+    Assign(String),
+
+    // TODO: Formula references that are capital Latin or Greek letters.
+    // :Q.*;, 5Q => 25
+
+    /// `1 2 + => 3`
+    Add,
+    /// `5 3 - => 2`
+    Subtract,
+    /// `2 3 × => 6`
+    Multiply,
+    /// `12 4 ÷ => 3`
+    Divide,
+    /// `1 ¯ => -1`
+    Negate,
+    /// `5 ² => 25`
+    Square,
+    /// `25 √ => 5`
+    Sqrt,
+    /// `2 5 ⁿ => 32`
+    Power,
+    /// `5 ⨪ => 0.2`
+    Reciprocal,
+    /// `3.14 ⌊ => 3`, `2.71 ⌊ => 2`
+    Floor,
+    /// `3.14 ⁅ => 3`, `2.71 ⁅ => 3`
+    Round,
+    /// `3.14 ⌈ => 4`, `2.71 ⌈ => 3`
+    Ceiling,
+    /// `[[1 2] [3 4] [5 6]] ⧻ => 3`
+    Length,
+    /// `123 ∘ => 123`
+    Identity,
+    /// `[1 2 3] ⊢ => 1`
+    First,
+    /// `[1 2 3] ⊣ => 3`
+    Last,
+    /// `[[1 2] [3 4] [5 6]] ⇌ => [[5 6] [3 4] [1 2]]`
+    Reverse,
 }
 
 impl Vm {
