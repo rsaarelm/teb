@@ -436,8 +436,10 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
         return operation(rest);
     }
 
-    if let Ok((n, rest)) = parse::positive_float(s) {
-        return Ok((Number(n), rest));
+    if c.is_ascii_digit() {
+        if let Ok((n, rest)) = parse::positive_float(s) {
+            return Ok((Number(n), rest));
+        }
     }
 
     match c {
