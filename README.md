@@ -258,3 +258,38 @@ date        accum   error
 ```
 
 Variants where you track a cumulative value that has varying increments, like kilometers run per day, or an absolute value, like body weight, are left as exercise.
+
+### Deciban probabilities
+
+[Decibans](https://en.wikipedia.org/wiki/Hartley_%28unit%29) are an intuitive unit of probability that lets you do probability calculations by adding them together.
+Going from deciban 0 to deciban +/-1 is around 5% difference in probability, around the threshold where a human will intuitively consider the probabilities to be meaningfully different.
+We can make a table that shows the corresponding odds ratios and percentual probabilities for deciban values for unlikely events.
+
+`ₑ` is the exponentiation function, and it can be given a subscript parameter to specify the base.
+If no base is specified, it is the natural exponentiation function.
+A logarithm function can be written by applying the inversion modifier to `ₑ`: `°ₑ`.
+
+```
+deciban  1-chance-in   prob
+  0        ~1<10÷ₑ₁₀⨪  50%<.₂10÷ₑ₁₀.1+÷
+ -1        ~1<         44%<
+ -2        ~2<         39%<
+ -3        ~2<         33%<
+ -4        ~3<         28%<
+ -5        ~3<         24%<
+ -6        ~4<         20%<
+ -7        ~5<         17%<
+ -8        ~6<         14%<
+ -9        ~8<         11%<
+-10       ~10<          9%<
+-11       ~13<          7%<
+-12       ~16<          6%<
+-13       ~20<          5%<
+-14       ~25<          4%<
+-15       ~32<          3%<
+-16       ~40<          2%<
+-17       ~50<          2%<
+-18       ~63<          2%<
+-19       ~79<          1%<
+-20      ~100<          1%<
+```
