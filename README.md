@@ -1,9 +1,15 @@
 # TEB - Table Evaluator
 
-Formats whitespace-separated plaintext tables into aligned columns and evaluates simple spreadsheet formulas embedded in them.
+Teb is for writing small spreadsheets in the middle of plaintext note files, source code comments etc.
+Everything needed to compute the spreadsheet is written in the open right there in the table.
+Unlike normal programming languages that have separate input, code and output, Teb has tables mixing all three and it rewrites the table to both format it and compute the output.
+This allows for fun unusual patterns like specifying output formatting by writing a dummy value in the desired format in the output position.
+
+Teb is inspired by existing plaintext spreadsheet programs like [org-mode tables](https://orgmode.org/manual/Tables.html) and [VIM Table Mode](https://github.com/dhruvasagar/vim-table-mode).
+It's different from these by being completely text editor agnostic and having a more compact formula syntax you can write directly in the table rather than requiring external formulas with a difficult to remember syntax.
 
 Usage: Compile the Rust program and install it on your path.
-Write unformatted tables and pipe them through `teb` from your editor to get the columns formatted and the formulas evaluated.
+Write unformatted tables and pipe them through `teb` command-line command from your editor to get the columns formatted and the formulas evaluated.
 
 Spreadsheet formulas are preceded by an ASCII left angle bracket `<` (to indicate the value coming from the right) and use stack-based tacit programming with the preceding row values used as stack values.
 The syntax for formulas is influenced by [Uiua](https://www.uiua.org/).
