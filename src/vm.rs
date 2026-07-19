@@ -138,7 +138,7 @@ impl Vm {
                 self.push(ret);
             }
 
-            Rerrange(indices) => {
+            Rearrange(indices) => {
                 let mut new_stack = Vec::new();
                 let mut pops = BTreeSet::new();
                 for i in indices {
@@ -400,7 +400,7 @@ enum Operation {
     /// offset.
     InsertColumn(usize),
     /// Pop named stack indices and push them in in the given pattern.
-    Rerrange(Vec<usize>),
+    Rearrange(Vec<usize>),
 }
 
 impl Operation {
@@ -484,7 +484,7 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
                 indices.push(0);
                 indices.push(0);
             }
-            Ok((Rerrange(indices), rest))
+            Ok((Rearrange(indices), rest))
         }
         // Inverse modifier.
         '°' => {
