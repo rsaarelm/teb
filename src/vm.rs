@@ -576,6 +576,9 @@ fn reformat_part(s: &str) -> (String, &str) {
         ("'''", "‴"),
         ("''", "″"),
         ("'", "′"),
+        // Common exponents
+        ("**2", "²"),
+        ("**3", "³"),
         // Multiplication and division ops.
         ("*", "×"),
         ("%", "÷"),
