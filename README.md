@@ -274,6 +274,7 @@ We can make a table that shows the corresponding odds ratios and percentual prob
 `ₑ` is the exponentiation function, and it can be given a subscript parameter to specify the base.
 If no base is specified, it is the natural exponentiation function.
 A logarithm function can be written by applying the inversion modifier to `ₑ`: `°ₑ`.
+The `~` formatting prefix specifies that the output should be always rounded to integer.
 
 ```
 deciban  1-chance-in   prob
