@@ -249,11 +249,11 @@ If the error ever goes negative, you've fallen behind on your goal and should pu
 
 ```
 start_date  2026-02-05   <→b
-interval             7d  <⨪→a
+interval             7d  <→a
 
 date        accum   error
 -           0       -
-2026-02-12  1<⇓⊣1+   0<.₂b-a*-  Catcher in the Rye
+2026-02-12  1<⇓⊣1+   0<.₂b-a÷-  Catcher in the Rye
 2026-02-18  2<       0.14<      The Great Gatsby
 2026-02-22  3<       0.57<      The Brothers Karamazov
 2026-02-28  4<       0.71<      Blood Meridian
