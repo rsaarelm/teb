@@ -116,7 +116,8 @@ impl FromStr for Cell {
         use Cell::*;
 
         // An input value?
-        if let Ok(value) = Value::from_str(s) {
+        if let Ok(mut value) = Value::from_str(s) {
+            value.prettify();
             return Ok(Input(value));
         }
 
@@ -125,11 +126,12 @@ impl FromStr for Cell {
             let formula = vm::prettify_formula(&formula);
 
             // The value must be parseable or empty.
-            if let Ok(value) = if !val.is_empty() {
+            if let Ok(mut value) = if !val.is_empty() {
                 Value::from_str(val)
             } else {
                 Ok(Default::default())
             } {
+                value.prettify();
                 return Ok(Output {
                     value,
                     formula,
@@ -162,8 +164,10 @@ pub enum Format {
     /// Always round to full integers, 3.14 = ~3
     Integer,
     /// Use scientific notation, 3268 = 3.27e3
-    // TODO: Precision opt
     Scientific(u8),
+    /// [Magnitude notation](https://magworld.pw/articles/notation/), a more
+    /// human-friendly variant of scientific notation. 20000 = ↑4.3 = ^4.3
+    Mag,
     /// Hexadecimal, fraction part is truncated. 16.25 = 0x10. Has optional
     /// zero padding count.
     Hexadecimal(u8),
@@ -207,9 +211,10 @@ impl Format {
                 if p == 0 {
                     "0e0".to_string()
                 } else {
-                    format!("{:.p$}e0", "", p = p as usize)
+                    format!("{:.p$}e0", 0.0, p = p as usize)
                 }
             }
+            Format::Mag => "↑0".to_string(),
             Format::Hexadecimal(p) => {
                 if p == 0 {
                     "0x0".to_string()
@@ -273,6 +278,17 @@ impl Format {
                     write!(w, "{num:.p$e}", p = FLOAT_PRECISION)
                 } else {
                     write!(w, "{num:.p$e}", p = p as usize)
+                }
+            }
+            Mag => {
+                // One decimal precision only on mags, if you need more, use sci
+                // notation.
+                let m = num.log10();
+                let r = (m * 10.0).round() / 10.0;
+                if r.fract().abs() < 0.001 {
+                    write!(w, "↑{}", m.round())
+                } else {
+                    write!(w, "↑{m:.1}")
                 }
             }
             Hexadecimal(p) => {
@@ -339,6 +355,10 @@ impl Format {
 ///    ("~3", Format::Integer, 3.0),
 ///    ("3.14e2", Format::Scientific(0), 314.0),
 ///    ("3.1415e2", Format::Scientific(4), 314.15),
+///    ("↑3", Format::Mag, 1000.0),
+///    ("^3", Format::Mag, 1000.0),
+///    ("↑-3", Format::Mag, 0.001),
+///    ("^-3", Format::Mag, 0.001),
 ///    ("0x10", Format::Hexadecimal(0), 16.0),
 ///    ("0x0010", Format::Hexadecimal(4), 16.0),
 ///    ("0b11", Format::Binary(0), 3.0),
@@ -381,6 +401,16 @@ impl Value {
 
     pub fn empty_formatted(format: Format) -> Self {
         Self::build(format, 0.0, "")
+    }
+
+    pub fn prettify(&mut self) {
+        if self.format == Format::Mag {
+            // Mag notation has the ASCII-friendly ^ character, but we want
+            // clean tables to use the unicode arrow prefix instead.
+            if let Some(t) = self.text.strip_prefix('^') {
+                self.set_text(format!("↑{t}"));
+            }
+        }
     }
 
     /// Set text of the value.
@@ -475,6 +505,7 @@ impl FromStr for Value {
         // to write the full number.
         match s {
             "e" | "E" => return Ok(Self::build(Scientific(0), 0.0, s)),
+            "↑" | "^" => return Ok(Self::build(Mag, 0.0, s)),
             "~" => return Ok(Self::build(Integer, 0.0, s)),
             "d" => return Ok(Self::build(Days, 0.0, s)),
             "%" => return Ok(Self::build(Percent, 0.0, s)),
@@ -514,6 +545,10 @@ impl FromStr for Value {
             }
 
             Ok(Self::build(Scientific(p), num, s))
+        } else if let Some((_, num, _)) = regex_captures!(r"^[↑^](-?\d+(\.\d*)?)$", s) {
+            let mut num = num.parse::<f64>()?;
+            num = 10f64.powf(num);
+            Ok(Self::build(Mag, num, s))
         } else if let Some((_, num)) = regex_captures!(r"^0x([0-9a-fA-F]+)$", s) {
             let num = u64::from_str_radix(num, 16)? as f64;
             let len = s.chars().count() - 2;

@@ -117,14 +117,14 @@ Input, note the `e` in the output field for Mark 1 bomb:
 
 ```
 - -
-2.99e8 <→c speed of light
+2.99e8 <::c speed of light
 
 --- mass(kg) yield(J)
 Little_Boy 4400 6e13 Historical bombs for reference
 Tsar_Bomba 27000 2e17
 - - -
-Mark_1 2 e<c²×
-Mark_2 4.5 <
+Mark_1 2 e<c**2*
+Mark_2 15 <
 ```
 
 Output:
@@ -138,7 +138,23 @@ Little_Boy   4400        6e13      Historical bombs for reference
 Tsar_Bomba  27000        2e17
 -           -         -
 Mark_1          2     1.79e17<c²×
-Mark_2          4.5   4.02e17<
+Mark_2         15     1.34e18<
+```
+
+Teb also supports [mag notation](https://magworld.pw/articles/notation/), a more human-friendly variant of scientific notation that displays numbers as their base-10 logarithms.
+You can use either `^` or `↑` as the prefix for mag notation, `^` will automatically be reformatted to `↑`.
+Here's the same table using mag notation:
+
+```
+-     -
+↑8.5  <→c  speed of light
+
+---         mass(kg)  yield(J)
+Little_Boy   4400     ↑13.8      Historical bombs for reference
+Tsar_Bomba  27000     ↑17.3
+-           -         -
+Mark_1          2     ↑17.3<c²×
+Mark_2         15     ↑18.2<
 ```
 
 ### Project estimation
