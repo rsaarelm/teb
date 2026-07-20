@@ -593,3 +593,21 @@ fn reformat_part(s: &str) -> (String, &str) {
         .map(|(c, rest)| (c.to_string(), rest))
         .expect("reformat_part: Input is empty")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aliases_list_is_sorted() {
+        // It must be kept sorted so binary search works on it.
+        let mut last = "";
+        for (from, _) in ALIASES {
+            assert!(
+                *from > last,
+                "Aliases list is not sorted: '{from}' <= '{last}'"
+            );
+            last = from;
+        }
+    }
+}
