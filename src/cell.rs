@@ -6,6 +6,8 @@ use std::{
 use anyhow::{Result, anyhow, bail};
 use lazy_regex::regex_captures;
 
+use crate::vm;
+
 pub const FLOAT_PRECISION: usize = 2;
 
 #[derive(Clone, Debug)]
@@ -120,7 +122,7 @@ impl FromStr for Cell {
 
         // Formula with optional value before it.
         if let Some((val, formula)) = s.split_once('<') {
-            let formula = formula.to_string();
+            let formula = vm::prettify_formula(&formula);
 
             // The value must be parseable or empty.
             if let Ok(value) = if !val.is_empty() {

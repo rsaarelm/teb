@@ -174,10 +174,10 @@ impl Vm {
             F('-') => {
                 self.dyadic_pervasive(|x, y| x - y)?;
             }
-            F('×') | F('*') => {
+            F('×') => {
                 self.dyadic_pervasive(|x, y| x * y)?;
             }
-            F('÷') | F('%') => {
+            F('÷') => {
                 self.dyadic_pervasive(|x, y| x / y)?;
             }
             // Negate
@@ -206,7 +206,7 @@ impl Vm {
                 self.monadic_pervasive(|x| x.ceil())?;
             }
             // Array length
-            F('⧻') | F('#') => {
+            F('⧻') => {
                 let a = self.pop()?;
                 self.push((a.length() as f64).into());
             }
@@ -508,4 +508,85 @@ fn operation(s: &str) -> Result<(Operation, &str)> {
         // to be a function call, the intepreter can figure it out.
         _ => Ok((F(c), rest)),
     }
+}
+
+// Keep this alphabetically sorted.
+static ALIASES: &[(&str, &str)] = &[
+    ("add", "+"),
+    ("ceiling", "⌈"),
+    ("divide", "÷"),
+    ("exponential", "ₑ"),
+    ("first", "⊢"),
+    ("floor", "⌊"),
+    ("flor", "⌊"), // floor
+    ("flr", "⌊"),  // floor
+    ("fork", "⊃"),
+    ("fst", "⊢"), // first
+    ("id", "∘"),  // identity
+    ("identity", "∘"),
+    ("implode", "]"),
+    ("last", "⊣"),
+    ("length", "⧻"),
+    ("lst", "⊣"), // last
+    ("multiply", "×"),
+    ("negate", "¯"),
+    ("power", "ⁿ"),
+    ("pull", "⇓"),
+    ("reciprocal", "⨪"),
+    ("reduce", "/"),
+    ("round", "⁅"),
+    ("sqrt", "√"),
+    ("subtract", "-"),
+    ("un", "°"),
+];
+
+/// Reformat ASCII notation into canonical unicode symbols in formula code.
+pub fn prettify_formula(s: &str) -> String {
+    let mut ret = String::new();
+    let mut rest = s;
+    while !rest.is_empty() {
+        let (part, r) = reformat_part(rest);
+        ret.push_str(&part);
+        rest = r;
+    }
+    ret
+}
+
+fn reformat_part(s: &str) -> (String, &str) {
+    // If we see text, try to decipher it into a command sequence.
+    if let Ok((word, rest)) = parse::word(s) {
+        if let Ok(syms) = parse::decipher(ALIASES, word) {
+            return (syms.join(""), rest);
+        } else {
+            // It didn't resolve into functions, assume it's a variable name
+            // or something and return it as-is.
+            return (word.to_string(), rest);
+        }
+    }
+
+    // ASCII subscript to unicode subscript.
+    if let Ok((subscript, rest)) = parse::ascii_subscript(s) {
+        return (subscript, rest);
+    }
+
+    // Some hardcoded substitutions.
+    for (from, to) in [
+        // ASCII primes to unicode, make sure to match the longest string
+        // first.
+        ("'''", "‴"),
+        ("''", "″"),
+        ("'", "′"),
+        // Multiplication and division ops.
+        ("*", "×"),
+        ("%", "÷"),
+        ("::", "→"),
+    ] {
+        if let Ok(rest) = parse::literal(s, from) {
+            return (to.to_string(), rest);
+        }
+    }
+
+    parse::char(s)
+        .map(|(c, rest)| (c.to_string(), rest))
+        .expect("reformat_part: Input is empty")
 }
