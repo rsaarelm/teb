@@ -4,9 +4,121 @@ use std::f64;
 use anyhow::bail;
 use lazy_regex::regex_captures;
 
-use crate::Table;
+use crate::{Element, Formula, Table};
 
 type Result<'a, T> = std::result::Result<(T, &'a str), &'a str>;
+
+/// Parse a single formula token.
+pub fn element(s: &str) -> Result<'_, Element> {
+    use Element::*;
+
+    let mut rest = s;
+    let c = &mut rest;
+
+    // Number literal.
+    if let Ok(n) = r(c, positive_float) {
+        return Ok((Num(n), *c));
+    }
+
+    // Named symbol, that isn't one of the letter-like builtins.
+    if literals(*c, &["ₑ", "ⁿ"]).is_err() && let Ok(name) = r(c, variable) {
+        return Ok((Var(name.to_string()), *c));
+    }
+
+    let elt = match r(c, char)? {
+        // Skip whitespace and commas.
+        x if x.is_whitespace() => return element(*c),
+        ',' => return element(*c),
+
+        '→' => Assign(r(c, variable)?.to_string()),
+        ':' => Define(r(c, variable)?.to_string(), r(c, subformula)?),
+        '⊃' => Fork(r(c, subformula)?, r(c, subformula)?),
+        '⊙' => Dip(r(c, subformula)?),
+        '/' => Reduce(r(c, subformula)?),
+        '°' => Un(r(c, subformula)?),
+
+        ']' => Implode,
+        '⇓' => Pull(r(c, subscript_number).map(|n| n as usize).unwrap_or(0)),
+
+        '.' => {
+            let mut indices = Vec::new();
+            while let Ok(n) = r(c, subscript_digit) {
+                if n == 0 {
+                    // Indexing starts from 1.
+                    return Err(s);
+                }
+                indices.push(n - 1);
+            }
+            if indices.is_empty() {
+                // Default behavior is to duplicate the top item.
+                indices.push(0);
+                indices.push(0);
+            }
+            Rearrange(indices)
+        }
+
+        'ₑ' => Exponential(
+            r(c, subscript_number)
+                .map(|n| n as f64)
+                .unwrap_or(f64::consts::E),
+        ),
+
+        '+' => Add,
+        '-' => Subtract,
+        '×' => Multiply,
+        '÷' => Divide,
+        '¯' => Negate,
+        '²' => Square,
+        '√' => Sqrt,
+        'ⁿ' => Power,
+        '⨪' => Reciprocal,
+        '⌊' => Floor,
+        '⁅' => Round,
+        '⌈' => Ceiling,
+        '⧻' => Length,
+        '∘' => Identity,
+        '⊢' => First,
+        '⊣' => Last,
+        '⇌' => Reverse,
+        _ => return Err(s),
+    };
+
+    Ok((elt, *c))
+}
+
+/// Parse either a group of tokens in parentheses or a single token.
+pub fn subformula(s: &str) -> Result<'_, Formula> {
+    if let Ok((_, mut rest)) = literal(s, "(") {
+        let c = &mut rest;
+
+        // A longer subformula will be enclosed in parens
+        let mut elts = Vec::new();
+        loop {
+            if let Ok(_) = r(c, |s| literal(s, ")")) {
+                return Ok((Formula(elts), *c));
+            }
+            elts.push(r(c, element)?);
+        }
+    } else {
+        // Otherwise read a single token and that's it.
+        let (e, rest) = element(s)?;
+        Ok((Formula(vec![e]), rest))
+    }
+}
+
+/// Parse a variable name. Must consist of a word of alphabetical characters,
+/// optionally followed by a subscript number and then an optional prime
+/// symbol.
+pub fn variable(s: &str) -> Result<'_, &str> {
+    let mut rest = s;
+    let c = &mut rest;
+
+    let _ = r(c, word)?;
+    let _ = r(c, subscript_number);
+    let _ = r(c, |s| literals(s, &["′", "″", "‴"]));
+
+    Ok((&s[..s.len() - rest.len()], rest))
+}
 
 pub fn subscript_digit(s: &str) -> Result<'_, usize> {
     let (c, rest) = char(s)?;

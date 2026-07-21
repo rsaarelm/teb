@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 /// Decipher a string of concatenated and possible abbreviated aliases into a
 /// sequence of their canonical counterparts. The lexicon list maps aliases

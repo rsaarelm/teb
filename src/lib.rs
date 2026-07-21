@@ -16,3 +16,4 @@ pub(crate) mod util;
 
 mod vm;
 pub use vm::Vm;
+pub(crate) use vm::{Element, Formula};

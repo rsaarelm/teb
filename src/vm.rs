@@ -1,14 +1,15 @@
 use std::{
     collections::{BTreeSet, HashMap},
     f64,
+    str::FromStr,
 };
 
 use crate::{Array, Cursor, parse, util};
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 #[derive(Clone, Default)]
 pub struct Vm {
-    bindings: HashMap<char, Array>,
+    bindings: HashMap<String, Formula>,
 
     /// Stack extracted from spreadsheet, will not be used for return values.
     input_stack: Vec<Array>,
@@ -25,7 +26,7 @@ impl Vm {
         ret
     }
 
-    pub fn run(&mut self, cur: &Cursor, mut formula: &str) -> Result<Option<Array>> {
+    pub fn run(&mut self, cur: &Cursor, formula: &str) -> Result<Option<Array>> {
         debug_assert!(
             formula.chars().all(|c| !c.is_whitespace()),
             "Formula should not contain whitespace"
@@ -34,11 +35,8 @@ impl Vm {
         self.work_stack.clear();
         self.input_stack = cur.row_left();
 
-        while !formula.is_empty() {
-            let (op, rest) = operation(formula)?;
-            formula = rest;
-            self.eval(cur, op)?;
-        }
+        let formula: Formula = formula.parse()?;
+        self.eval(cur, &formula)?;
 
         // Only return values from the work stack. If there's only input stack
         // left, return none. This lets us not print noise values from things like
@@ -50,29 +48,37 @@ impl Vm {
         }
     }
 
-    fn eval(&mut self, cur: &Cursor, op: Operation) -> Result<()> {
-        use Operation::*;
+    fn eval(&mut self, cur: &Cursor, formula: &Formula) -> Result<()> {
+        for elt in formula {
+            self.step(cur, elt)?;
+        }
+        Ok(())
+    }
 
-        match op {
-            Number(n) => {
-                self.push(n.into());
+    fn step(&mut self, cur: &Cursor, elt: &Element) -> Result<()> {
+        use Element::*;
+        match elt {
+            Num(n) => {
+                self.push((*n).into());
             }
-
-            Var(c) => {
-                if let Some(a) = self.bindings.get(&c) {
-                    self.push(a.clone());
+            Arr(a) => {
+                self.push(a.clone());
+            }
+            Var(s) => {
+                if let Some(fun) = self.bindings.get(s).cloned() {
+                    self.eval(cur, &fun)?;
                 } else {
-                    bail!("Undefined variable: '{c}'");
+                    bail!("Undefined variable: '{s}'");
                 }
             }
-
-            AssignTo(c) => {
+            Assign(name) => {
                 let a = self.pop()?;
-                self.bindings.insert(c, a);
+                self.bindings.insert(name.clone(), Formula(vec![Arr(a)]));
             }
-
-            // Modifiers
-            Fork(op1, op2) => {
+            Define(name, formula) => {
+                self.bindings.insert(name.clone(), formula.clone());
+            }
+            Fork(f1, f2) => {
                 // Compute the second operation first so we can push its
                 // result on top of the first one later. Use a cloned VM so we
                 // can compute it without disturbing the main stack.
@@ -80,35 +86,20 @@ impl Vm {
                 // XXX: Cloning the full VM is pretty expensive, there are
                 // probably cleverer ways to do this.
                 let mut scratch = self.clone();
-                scratch.eval(cur, *op2)?;
-                // XXX: Is it okay to always grab just one output?
+                scratch.eval(cur, f2)?;
+                // TODO: Figure out how many outputs the operation produces
+                // and grab them.
                 let a = scratch.pop()?;
 
-                self.eval(cur, *op1)?;
+                self.eval(cur, f1)?;
                 self.push(a);
             }
-            Reduce(op) => {
-                // Reduce array contents in a temporary VM.
-                let mut scratch = self.spawn();
+            Dip(f) => {
                 let a = self.pop()?;
-                if a.is_scalar() {
-                    bail!("Cannot reduce a scalar");
-                }
-                for cell in a.explode() {
-                    scratch.push(cell);
-                }
-                while scratch.work_stack.len() > 1 {
-                    let old_len = scratch.work_stack.len();
-                    scratch.eval(cur, *op.clone())?;
-                    if scratch.work_stack.len() >= old_len {
-                        bail!("Reduce operation did not reduce stack size");
-                    }
-                }
-                self.push(scratch.pop()?);
+                self.eval(cur, f)?;
+                self.push(a);
             }
-
-            // Crunch input and work stacks into a single array.
-            ImplodeStack => {
+            Implode => {
                 let Some(top) = self.peek() else {
                     self.push(Array::default());
                     return Ok(());
@@ -122,9 +113,8 @@ impl Vm {
                 self.input_stack.clear();
                 self.push(ret);
             }
-
-            InsertColumn(offset) => {
-                let column = cur.column_above(offset);
+            Pull(offset) => {
+                let column = cur.column_above(*offset);
 
                 let Some(top) = column.last() else {
                     self.push(Array::default());
@@ -132,18 +122,17 @@ impl Vm {
                 };
                 // Above-column values must all have same shape.
                 if !column.iter().all(|a| a.shape() == top.shape()) {
-                    bail!("Cannot insert column, values have different shapes.",);
+                    bail!("Cannot pull column, values have different shapes.",);
                 }
                 let ret = Array::from_iter(column.iter());
                 self.push(ret);
             }
-
             Rearrange(indices) => {
                 let mut new_stack = Vec::new();
                 let mut pops = BTreeSet::new();
                 for i in indices {
-                    new_stack.push(self.stack_nth(i)?.clone());
-                    pops.insert(i);
+                    new_stack.push(self.stack_nth(*i)?.clone());
+                    pops.insert(*i);
                 }
                 // Pop from largest to smallest so we don't mess up the stack
                 // order.
@@ -156,62 +145,52 @@ impl Vm {
                 }
             }
 
-            Exp(base) => {
-                self.monadic_pervasive(|x| base.powf(x))?;
+            Reduce(f) => {
+                // Reduce array contents in a temporary VM.
+                let mut scratch = self.spawn();
+                let a = self.pop()?;
+                if a.is_scalar() {
+                    bail!("Cannot reduce a scalar");
+                }
+                let n = a.length();
+                for cell in a.explode() {
+                    scratch.push(cell);
+                }
+                for _ in 0..(n - 1) {
+                    scratch.eval(cur, f)?;
+                }
+                self.push(scratch.pop()?);
             }
 
-            Log(base) => {
-                if base <= 0.0 || base == 1.0 {
+            Un(f) => {
+                let f = f.inverted()?;
+                self.eval(cur, &f)?;
+            }
+
+            Logarithm(base) => {
+                if *base <= 0.0 || *base == 1.0 {
                     bail!("Logarithm base must be positive and not equal to 1");
                 }
-                self.monadic_pervasive(|x| x.log(base))?;
+                self.monadic_pervasive(|x| x.log(*base))?;
             }
-
-            // Functions
-            F('+') => {
-                self.dyadic_pervasive(|x, y| x + y)?;
-            }
-            F('-') => {
-                self.dyadic_pervasive(|x, y| x - y)?;
-            }
-            F('×') => {
-                self.dyadic_pervasive(|x, y| x * y)?;
-            }
-            F('÷') => {
-                self.dyadic_pervasive(|x, y| x / y)?;
-            }
-            // Negate
-            F('¯') => {
-                self.monadic_pervasive(|x| -x)?;
-            }
-            F('²') => {
-                self.monadic_pervasive(|x| x * x)?;
-            }
-            F('√') => {
-                self.monadic_pervasive(|x| x.sqrt())?;
-            }
-            // a bⁿ, raise a to b:th power
-            F('ⁿ') => {
-                self.dyadic_pervasive(|x, y| x.powf(y))?;
-            }
-            // Reciprocal
-            F('⨪') => self.monadic_pervasive(|x| 1.0 / x)?,
-            F('⌊') => {
-                self.monadic_pervasive(|x| x.floor())?;
-            }
-            F('⁅') => {
-                self.monadic_pervasive(|x| x.round())?;
-            }
-            F('⌈') => {
-                self.monadic_pervasive(|x| x.ceil())?;
-            }
-            // Array length
-            F('⧻') => {
+            Exponential(base) => self.monadic_pervasive(|x| base.powf(x))?,
+            Add => self.dyadic_pervasive(|x, y| x + y)?,
+            Subtract => self.dyadic_pervasive(|x, y| x - y)?,
+            Multiply => self.dyadic_pervasive(|x, y| x * y)?,
+            Divide => self.dyadic_pervasive(|x, y| x / y)?,
+            Negate => self.monadic_pervasive(|x| -x)?,
+            Square => self.monadic_pervasive(|x| x * x)?,
+            Sqrt => self.monadic_pervasive(|x| x.sqrt())?,
+            Power => self.dyadic_pervasive(|x, y| x.powf(y))?,
+            Reciprocal => self.monadic_pervasive(|x| 1.0 / x)?,
+            Floor => self.monadic_pervasive(|x| x.floor())?,
+            Round => self.monadic_pervasive(|x| x.round())?,
+            Ceiling => self.monadic_pervasive(|x| x.ceil())?,
+            Length => {
                 let a = self.pop()?;
                 self.push((a.length() as f64).into());
             }
-            // Identity
-            F('∘') => {
+            Identity => {
                 // NB. This isn't equivalent to doing nothing since the
                 // pop-push might be moving the value from the input stack
                 // (not shown as formula result) to the work stack (shown as
@@ -219,8 +198,7 @@ impl Vm {
                 let a = self.pop()?;
                 self.push(a);
             }
-            // First
-            F('⊢') => {
+            First => {
                 let a = self.pop()?;
                 if a.is_scalar() {
                     self.push(a);
@@ -233,8 +211,7 @@ impl Vm {
                     }
                 }
             }
-            // Last
-            F('⊣') => {
+            Last => {
                 let a = self.pop()?;
                 if a.is_scalar() {
                     self.push(a);
@@ -247,8 +224,7 @@ impl Vm {
                     }
                 }
             }
-            // Reverse array
-            F('⇌') => {
+            Reverse => {
                 let a = self.pop()?;
                 if a.is_scalar() {
                     self.push(a);
@@ -258,46 +234,9 @@ impl Vm {
                     self.push(cells.iter().collect());
                 }
             }
-
-            // Take n rows of array
-            F('↙') => {
-                let n = self.pop()?;
-                let a = self.pop()?;
-
-                let Some(n) = n.as_scalar().map(|n| n as i32) else {
-                    // It can probably be given semantics for array args
-                    // too...
-                    bail!("take: Operation requires a scalar argument");
-                };
-                if n.abs() as usize > a.length() {
-                    bail!("take: Not enough elements");
-                }
-                if a.is_scalar() {
-                    bail!("take: Cannot take rows of a scalar");
-                }
-
-                let rows = a.explode();
-
-                let a = if n < 0 {
-                    // take last abs(n) rows as one array
-                    Array::from_iter(rows.iter().skip(rows.len() - n.abs() as usize))
-                } else {
-                    // take first n rows as one array
-                    Array::from_iter(rows.iter().take(n as usize))
-                };
-                self.push(a);
-            }
-
-            F(c) => {
-                bail!("Unknown function: '{c}'");
-            }
         }
-
         Ok(())
     }
-
-    // TODO: How do I abstract these so I can crank in the argument
-    // rearranging?
 
     pub fn monadic_pervasive(&mut self, f: impl Fn(f64) -> f64) -> Result<()> {
         let a = self.pop()?;
@@ -377,143 +316,11 @@ impl Vm {
     }
 }
 
-#[derive(Clone, Debug)]
-enum Operation {
-    /// Call a function.
-    F(char),
-    /// Refer a variable,
-    Var(char),
-    /// Push a number to stack.
-    Number(f64),
-
-    /// Exponential with base, raise base to value at top of stack.
-    Exp(f64),
-
-    /// Take logarithm with base from top of stack.
-    Log(f64),
-
-    /// Assign to variable
-    AssignTo(char),
-    /// Reduce array with inner operation.
-    Reduce(Box<Operation>),
-    /// Execute two operations with the same inputs.
-    Fork(Box<Operation>, Box<Operation>),
-    /// Turn stack into array
-    ImplodeStack,
-    /// Insert column from above into stack. You can displace to the left by
-    /// offset.
-    InsertColumn(usize),
-    /// Pop named stack indices and push them in in the given pattern.
-    Rearrange(Vec<usize>),
-}
-
-impl Operation {
-    pub fn invert(&self) -> Result<Operation> {
-        // Inversion is sort of hairy, add cases as we go.
-        use Operation::*;
-        match self {
-            F('∘') => Ok(F('∘')),
-
-            F('²') => Ok(F('√')),
-            F('√') => Ok(F('²')),
-
-            Log(base) => Ok(Exp(*base)),
-            Exp(base) => Ok(Log(*base)),
-            _ => bail!("Cannot invert operation: '{self:?}'"),
-        }
-    }
-}
-
-/// Parse the next operation from input, simple ones are usually one
-/// character, modifiers create multi-char operations.
-fn operation(s: &str) -> Result<(Operation, &str)> {
-    use Operation::*;
-
-    let Some(c) = s.chars().next() else {
-        bail!("Empty input");
-    };
-
-    let rest = &s[c.len_utf8()..];
-
-    // Commas can serve as separators within a formula.
-    if c.is_whitespace() || c == ',' {
-        return operation(rest);
-    }
-
-    if c.is_ascii_digit() {
-        if let Ok((n, rest)) = parse::positive_float(s) {
-            return Ok((Number(n), rest));
-        }
-    }
-
-    match c {
-        c if c.is_ascii_alphabetic() => Ok((Var(c), rest)),
-        '→' => {
-            let Ok((Var(c), rest)) = operation(rest) else {
-                bail!("Expected variable after assignment operator");
-            };
-            Ok((AssignTo(c), rest))
-        }
-        '/' => {
-            let (op, rest) = operation(rest)?;
-            Ok((Reduce(Box::new(op)), rest))
-        }
-        '⊃' => {
-            let (op1, rest) = operation(rest)?;
-            let (op2, rest) = operation(rest)?;
-            Ok((Fork(Box::new(op1), Box::new(op2)), rest))
-        }
-        ']' => Ok((ImplodeStack, rest)),
-        '⇓' => {
-            if let Ok((subscript, rest)) = parse::subscript_number(rest) {
-                Ok((InsertColumn(subscript as usize), rest))
-            } else {
-                Ok((InsertColumn(0), rest))
-            }
-        }
-        '.' => {
-            // Rearrange operation, read subsequent subscripts as stack
-            // indices.
-            let mut indices = Vec::new();
-            let mut rest = rest;
-            while let Ok((n, r)) = parse::subscript_digit(rest) {
-                if n == 0 {
-                    bail!("Stack indices are 1-based, cannot use 0");
-                }
-                indices.push(n - 1);
-                rest = r;
-            }
-            if indices.is_empty() {
-                // Default behavior is to duplicate the top item.
-                indices.push(0);
-                indices.push(0);
-            }
-            Ok((Rearrange(indices), rest))
-        }
-        // Inverse modifier.
-        '°' => {
-            let (op, rest) = operation(rest)?;
-            Ok((op.invert()?, rest))
-        }
-
-        'ₑ' => {
-            if let Ok((base, rest)) = parse::subscript_number(rest) {
-                Ok((Exp(base as f64), rest))
-            } else {
-                Ok((Exp(f64::consts::E), rest))
-            }
-        }
-
-        // Anything we don't know and can't rule off with blanket rules is assumed
-        // to be a function call, the intepreter can figure it out.
-        _ => Ok((F(c), rest)),
-    }
-}
-
 // Keep this alphabetically sorted.
 static ALIASES: &[(&str, &str)] = &[
     ("add", "+"),
     ("ceiling", "⌈"),
+    ("dip", "⊙"),
     ("divide", "÷"),
     ("exponential", "ₑ"),
     ("first", "⊢"),
@@ -532,6 +339,7 @@ static ALIASES: &[(&str, &str)] = &[
     ("negate", "¯"),
     ("power", "ⁿ"),
     ("pull", "⇓"),
+    ("rearrange", "."),
     ("reciprocal", "⨪"),
     ("reduce", "/"),
     ("round", "⁅"),
@@ -592,6 +400,135 @@ fn reformat_part(s: &str) -> (String, &str) {
     parse::char(s)
         .map(|(c, rest)| (c.to_string(), rest))
         .expect("reformat_part: Input is empty")
+}
+
+#[derive(Clone, Debug)]
+pub struct Formula(pub Vec<Element>);
+
+impl<'a> IntoIterator for &'a Formula {
+    type Item = &'a Element;
+    type IntoIter = std::slice::Iter<'a, Element>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl Formula {
+    pub fn inverted(&self) -> Result<Formula> {
+        use Element::*;
+
+        Ok(Formula(match self.0[..] {
+            [Exponential(n)] => vec![Logarithm(n)],
+            [Logarithm(n)] => vec![Exponential(n)],
+            [Identity] => vec![Identity],
+            [Square] => vec![Sqrt],
+            [Sqrt] => vec![Square],
+            // TODO: More reverse operations.
+            _ => bail!("Cannot invert formula"),
+        }))
+    }
+}
+
+impl FromStr for Formula {
+    type Err = anyhow::Error;
+
+    fn from_str(mut s: &str) -> std::result::Result<Self, Self::Err> {
+        let mut ret = Vec::new();
+        while !s.is_empty() {
+            let (token, rest) = parse::element(s).map_err(|_| anyhow!("Bad formula"))?;
+            ret.push(token);
+            s = rest;
+        }
+        Ok(Formula(ret))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Element {
+    /// Numeric literal, floating point parsing applies, but the token must
+    /// begin with a digit. (You can only represent positive reals,
+    /// use `123¯` to get -123.)
+    Num(f64),
+
+    /// Array literal.
+    Arr(Array),
+
+    /// Variable reference. Variables can be any sequence of alphabetical
+    /// characters ("abcαβγ"), optionally followed by any sequence of
+    /// subscript digits (₁₂₃), then optionally followed by one to three prime
+    /// symbols, (′,″,‴).
+    Var(String),
+
+    /// Assign to variable, `5→a`
+    Assign(String),
+
+    /// User-defined formula, `:Q(.×)`
+    Define(String, Formula),
+
+    /// `5 ⊃(2+)(2×) => 7 10`
+    Fork(Formula, Formula),
+
+    /// `10 5 ⊙(2×) => 20 5`
+    Dip(Formula),
+    /// `[1,2,3,4] /+ => 10`
+    Reduce(Formula),
+    /// `1024 °ₑ₂ => 10`
+    Un(Formula),
+
+    /// `1 2 ... 10 ] => [1,2,...,10]`
+    Implode,
+
+    /// ```notrust
+    ///  1
+    ///  2
+    ///  ⇓ => [1,2]
+    /// ```
+    Pull(usize),
+
+    /// `1 2 3 .₁₃ => 1 2 3 3 1`
+    Rearrange(Vec<usize>),
+
+    /// `1 ₑ => 2.71828 `, `10 ₑ₂ => 1024`
+    Exponential(f64),
+
+    /// Can be obtained by inverting an exponential.
+    Logarithm(f64),
+
+    /// `1 2 + => 3`
+    Add,
+    /// `5 3 - => 2`
+    Subtract,
+    /// `2 3 × => 6`
+    Multiply,
+    /// `12 4 ÷ => 3`
+    Divide,
+    /// `1 ¯ => -1`
+    Negate,
+    /// `5 ² => 25`
+    Square,
+    /// `25 √ => 5`
+    Sqrt,
+    /// `2 5 ⁿ => 32`
+    Power,
+    /// `5 ⨪ => 0.2`
+    Reciprocal,
+    /// `3.14 ⌊ => 3`, `2.71⌊ => 2`
+    Floor,
+    /// `3.14 ⁅ => 3`, `2.71⁅ => 3`
+    Round,
+    /// `3.14 ⌈ => 4`, `2.71⌈ => 3`
+    Ceiling,
+    /// `[[1,2][3,4][5,6]] ⧻ => 3`
+    Length,
+    /// `123 ∘ => 123`
+    Identity,
+    /// `[1,2,3] ⊢ => 1`
+    First,
+    /// `[1,2,3] ⊣ => 3`
+    Last,
+    /// `[[1,2][3,4][5,6]] ⇌ => [[5,6][3,4][1,2]]`
+    Reverse,
 }
 
 #[cfg(test)]
