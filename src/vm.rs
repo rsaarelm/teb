@@ -3,7 +3,7 @@ use std::{
     f64,
 };
 
-use crate::{Array, Cursor, parse};
+use crate::{Array, Cursor, parse, util};
 use anyhow::{Result, bail};
 
 #[derive(Clone, Default)]
@@ -555,7 +555,7 @@ pub fn prettify_formula(s: &str) -> String {
 fn reformat_part(s: &str) -> (String, &str) {
     // If we see text, try to decipher it into a command sequence.
     if let Ok((word, rest)) = parse::word(s) {
-        if let Ok(syms) = parse::decipher(ALIASES, word) {
+        if let Ok(syms) = util::decipher(ALIASES, word) {
             return (syms.join(""), rest);
         } else {
             // It didn't resolve into functions, assume it's a variable name
