@@ -1,13 +1,15 @@
-use anyhow::{Result, bail};
+//! Stateless parsing primitives.
+use std::f64;
+
+use anyhow::bail;
+use lazy_regex::regex_captures;
 
 use crate::Table;
 
-pub fn subscript_digit(s: &str) -> Result<(usize, &str)> {
-    if s.is_empty() {
-        bail!("No input");
-    }
+type Result<'a, T> = std::result::Result<(T, &'a str), &'a str>;
 
-    let c = s.chars().next().unwrap();
+pub fn subscript_digit(s: &str) -> Result<'_, usize> {
+    let (c, rest) = char(s)?;
     let digit = match c {
         '₀' => 0,
         '₁' => 1,
@@ -19,31 +21,31 @@ pub fn subscript_digit(s: &str) -> Result<(usize, &str)> {
         '₇' => 7,
         '₈' => 8,
         '₉' => 9,
-        _ => bail!("Not a subscript digit: {c}"),
+        _ => return Err(s),
     };
 
-    Ok((digit, &s[c.len_utf8()..]))
+    Ok((digit, rest))
 }
 
-pub fn subscript_number(s: &str) -> Result<(u32, &str)> {
-    let mut number = 0;
+pub fn subscript_number(s: &str) -> Result<'_, u32> {
     let mut rest = s;
+    let c = &mut rest;
 
-    while let Ok((digit, r)) = subscript_digit(rest) {
+    let mut number = 0;
+    while let Ok(digit) = r(c, subscript_digit) {
         number = number * 10 + digit as u32;
-        rest = r;
     }
 
     if rest == s {
-        bail!("No subscript digits found");
+        return Err(s);
     }
 
     Ok((number, rest))
 }
 
 /// Parse "_123" into "₁₂₃".
-pub fn ascii_subscript(s: &str) -> Result<(String, &str)> {
-    let rest = literal(s, "_")?;
+pub fn ascii_subscript(s: &str) -> Result<'_, String> {
+    let (_, rest) = literal(s, "_")?;
     let (digits, rest) = digits(rest)?;
     let mut ret = String::new();
     for d in digits.chars() {
@@ -58,7 +60,7 @@ pub fn ascii_subscript(s: &str) -> Result<(String, &str)> {
             '7' => ret.push('₇'),
             '8' => ret.push('₈'),
             '9' => ret.push('₉'),
-            _ => bail!("Invalid digit for subscript: '{d}'"),
+            _ => return Err(s),
         }
     }
 
@@ -68,7 +70,7 @@ pub fn ascii_subscript(s: &str) -> Result<(String, &str)> {
 /// If the nonempty lines in input all share the exact same prefix made of
 /// spaces and tabs, return that prefix. If nonempty lines have inconsistent
 /// indentation, return an error.
-pub fn indent_prefix(text: &str) -> Result<String> {
+pub fn indent_prefix(text: &str) -> anyhow::Result<String> {
     // Note that we can't use Rust's whitespace trimming functions here
     // because they treat NBSPs as whitespace. We want to treat NBSPs as a
     // non-whitespace character we can use to shape left trims of tables that
@@ -97,8 +99,8 @@ pub fn indent_prefix(text: &str) -> Result<String> {
 /// Return the next chunk of consecutive non-empty lines from input (with any
 /// preceding empty lines skipped), and the remaining input after the chunk.
 /// Return an error if there are no non-empty lines in the input.
-pub fn consecutive_content(input: &str) -> Result<(&str, &str)> {
-    let mut lines = input.lines().peekable();
+pub fn consecutive_content(s: &str) -> Result<'_, &str> {
+    let mut lines = s.lines().peekable();
     // Skip leading empty lines.
     while let Some(line) = lines.peek() {
         if line.trim().is_empty() {
@@ -109,11 +111,11 @@ pub fn consecutive_content(input: &str) -> Result<(&str, &str)> {
     }
 
     if lines.peek().is_none() {
-        bail!("No non-empty lines in input");
+        return Err(s);
     }
 
     let start = lines.peek().unwrap().as_ptr() as usize;
-    let mut end = input.len() + input.as_ptr() as usize;
+    let mut end = s.len() + s.as_ptr() as usize;
     for line in lines {
         if line.trim().is_empty() {
             end = line.as_ptr() as usize;
@@ -121,20 +123,20 @@ pub fn consecutive_content(input: &str) -> Result<(&str, &str)> {
         }
     }
 
-    let content = &input[start - input.as_ptr() as usize..end - input.as_ptr() as usize];
-    let rest = &input[end - input.as_ptr() as usize..];
+    let content = &s[start - s.as_ptr() as usize..end - s.as_ptr() as usize];
+    let rest = &s[end - s.as_ptr() as usize..];
     Ok((content, rest))
 }
 
-pub fn tables(mut input: &str, parse_numbers: bool) -> Result<Vec<Table>> {
+pub fn tables(s: &str, parse_numbers: bool) -> anyhow::Result<Vec<Table>> {
     // While input remains, scan for groups of consecutive non-empty lines and
     // try to parse them into tables.
     let mut ret = Vec::new();
 
-    while let Ok((chunk, rest)) = consecutive_content(input) {
-        let table = Table::new(chunk, parse_numbers)?;
-        ret.push(table);
-        input = rest;
+    let mut rest = s;
+    let c = &mut rest;
+    while let Ok(chunk) = r(c, consecutive_content) {
+        ret.push(Table::new(chunk, parse_numbers)?);
     }
 
     Ok(ret)
@@ -144,53 +146,59 @@ pub fn tables(mut input: &str, parse_numbers: bool) -> Result<Vec<Table>> {
 /// any junk immediately after the number. The number mustn't have a leading +
 /// or - sign. Return a parsed number and the remaining input after it if
 /// successful.
-pub fn positive_float(s: &str) -> Result<(f64, &str)> {
-    if s.starts_with('+') || s.starts_with('-') {
-        bail!("Number must not have a leading + or - sign");
-    }
-
-    let (ret, bytes) = lexical_core::parse_partial::<f64>(s.as_bytes())?;
-    Ok((ret, &s[bytes..]))
-}
-
-pub fn word(s: &str) -> Result<(&str, &str)> {
-    // Take alphabetical characters as far as you can.
-    let end = s
-        .find(|c: char| !c.is_alphabetic())
-        .unwrap_or_else(|| s.len());
-    if end == 0 {
-        bail!("No word found");
-    }
-    Ok((&s[..end], &s[end..]))
-}
-
-pub fn literal<'a>(s: &'a str, literal: &str) -> Result<&'a str> {
-    if s.starts_with(literal) {
-        Ok(&s[literal.len()..])
+pub fn positive_float(s: &str) -> Result<'_, f64> {
+    if let Some((num, _, _)) = regex_captures!(r"^\d+(\.\d+)?([eE][+-]?\d+)?", s) {
+        Ok((num.parse().unwrap(), &s[num.len()..]))
     } else {
-        bail!("Expected literal '{}'", literal);
+        Err(s)
     }
 }
 
-pub fn digits(s: &str) -> Result<(&str, &str)> {
-    // Take digits as far as you can.
-    let end = s
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or_else(|| s.len());
-    if end == 0 {
-        bail!("No digits found");
+pub fn literal<'a>(s: &'a str, literal: &str) -> Result<'a, &'a str> {
+    if s.starts_with(literal) {
+        Ok((&s[..literal.len()], &s[literal.len()..]))
+    } else {
+        Err(s)
     }
-    Ok((&s[..end], &s[end..]))
+}
+
+pub fn literals<'a>(s: &'a str, literals: &[&str]) -> Result<'a, &'a str> {
+    for &lit in literals {
+        if let Ok((lit, rest)) = literal(s, lit) {
+            return Ok((lit, rest));
+        }
+    }
+    Err(s)
+}
+
+fn one_or_more<'a>(s: &str, f: impl Fn(char) -> bool) -> Result<'_, &str> {
+    match s.find(|c: char| !f(c)).unwrap_or_else(|| s.len()) {
+        0 => Err(s),
+        end => Ok((&s[..end], &s[end..])),
+    }
+}
+
+pub fn word(s: &str) -> Result<'_, &str> {
+    one_or_more(s, char::is_alphabetic)
+}
+
+pub fn digits(s: &str) -> Result<'_, &str> {
+    one_or_more(s, |c| c.is_ascii_digit())
 }
 
 /// Return the first non-whitespace character from input and the remaining
 /// input after it.
-pub fn char(s: &str) -> Result<(char, &str)> {
-    // Remember that we need to skip over any leading whitespace.
-    let s = s.trim_start();
-    if s.is_empty() {
-        bail!("No input");
-    }
-    let c = s.chars().next().unwrap();
+pub fn char(s: &str) -> Result<'_, char> {
+    let c = s.chars().next().ok_or(s)?;
     Ok((c, &s[c.len_utf8()..]))
+}
+
+/// Wrapper that treats a string reference as an advancing cursor pointer.
+fn r<'a, T>(
+    s: &mut &'a str,
+    f: impl Fn(&'a str) -> Result<'a, T>,
+) -> std::result::Result<T, &'a str> {
+    let (ret, rest) = f(s)?;
+    *s = rest;
+    Ok(ret)
 }

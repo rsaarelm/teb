@@ -584,7 +584,7 @@ fn reformat_part(s: &str) -> (String, &str) {
         ("%", "÷"),
         ("::", "→"),
     ] {
-        if let Ok(rest) = parse::literal(s, from) {
+        if let Ok((_, rest)) = parse::literal(s, from) {
             return (to.to_string(), rest);
         }
     }

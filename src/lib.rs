@@ -12,7 +12,7 @@ pub(crate) use spreadsheet::{Cursor, Spreadsheet};
 mod table;
 pub use table::Table;
 
-pub mod util;
+pub(crate) mod util;
 
 mod vm;
 pub use vm::Vm;
