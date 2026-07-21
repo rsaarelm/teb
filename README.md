@@ -24,10 +24,10 @@ Input:
 
 ```
 item unit qty cost
-milk 3 2 <×
+milk 3 2 <*
 bananas 0.5 6 <
 flour 1.2 1 <
-- - total: <⇓/+
+- - total: <pul/+
 ```
 
 The input is piped through `teb` to yield formatted output with formula results calculated before the angle brackets.
@@ -45,16 +45,22 @@ flour    1.2   1        1.2<
 Formulas are written after the angle brackets.
 Formulas use reverse Polish notations and take values on the row they're on as stack arguments.
 The arithmetic operators are `+`, `-`, `×` and `÷`.
+In input, you can use the ASCII aliases `*` and `%` for multiply and divide.
 Unicode symbols are used unapologetically, since it's imperative to get the formulas as compact as possible to fit them in the table layout without too much disruption.
 An empty left angle bracket will reuse the last formula seen on the same column.
 
-You can operate on the column above a formula by pulling it in as an array value using the `⇓` operation.
-The reduce modifier `/` recursively applies its operand to all array values, so `/+` produces a sum of the array's values.
+You can operate on the column above a formula by pulling it in as an array value using the `pull (⇓)` operation.
+The reduce modifier `reduce (/)` recursively applies its operand to all array values, so `/+` produces a sum of the array's values.
+
+You don't need to be able to type unicode glyphs to use Teb.
+All the operators can be written as their plaintext names in the input, and the formatter will turn them into glyphs in output.
+You can abbreviate long names down to their three initial letters and string abbreviated names together without space, and Teb will magically parse it.
+You could write the formula in the final cell as `pulredadd` in your input and it would resolve to `⇓/+`.
 
 ### Account running total
 
 Add transaction to the previous balance above on each row.
-∘ is the identity function that just repeats the last value.
+We just repeat the last value for the top cell so we use the `identity (∘)` function.
 You need to have something in a formula even if you just want to repeat the top input stack value, since the default stack values built from the table row before the formula starts executing never qualify as cell output.
 
 ```
@@ -66,28 +72,40 @@ scratch_ticket   200    1060<
 gas              -60    1000<
 ```
 
-In this case we only want the last value of the array so we use the last (`⊣`) operator on it.
+In this case we only want the last value of the array so we use the `last (⊣)` operator on it.
 
 ### Body-mass-index calculation
 
-The rearrange operator `.` takes a list of subscripts of stack indices to move to the top of the stack.
-There's a convenience operator `²` for squaring a value. We use `.₂` to bring height (the second stack value) to the top to be squared before weight is divided by it to get the BMI.
+The operator `rearrange (.)` takes a list of subscripts of stack indices to move to the top of the stack.
+There's a convenience operator `²` (ASCII `**2`) for squaring a value. We use `.₂` to bring height (the second stack value) to the top to be squared before weight is divided by it to get the BMI.
+The ASCII method to input subscripts is to write an underscore followed by regular numbers, `_2`.
 With no parameters, the rearrange operator doubles the top argument and it can be used to display the input cell with no modifications.
-You get the average of the column by using the fork (`⊃`) modifier that applies two operations to input.
-`#` returns the number of rows in the array.
+You get the average of the column by using the `fork (⊃)` modifier that applies two operations to input.
+`length (⧻)` returns the number of rows in the array.
 
+Input:
+```
+--- height(m) weight(kg) BMI
+Alice 1.62 56 <._2**2%
+Bob 1.70 68 <
+Carol 1.78 74 <
+Vladimir 1.92 230 <
+- - Avg: <pulfor/+len%
+```
+
+Output:
 ```
 ---       height(m)  weight(kg)  BMI
 Alice     1.62        56         21.34<.₂²÷
 Bob       1.70        68         23.53<
 Carol     1.78        74         23.36<
 Vladimir  1.92       230         62.39<
--         -          Avg:        32.65<⇓⊃/+#÷
+-         -          Avg:        32.65<⇓⊃/+⧻÷
 ```
 
 ### Grade averages
 
-To compute over the whole row, use `]` to collapse the stack elements into a single array value.
+To compute over the whole row, use `implode (])` to collapse the stack elements into a single array value.
 
 ```
 ---       math  physics  cs  literature  avg
@@ -229,8 +247,10 @@ s(a) = 12.92a                  if a ≤ 0.0031308
 We want a grayscale color ramp that has simple fractions of the linear RGB range as its values, because these will produce clean [Bayer dithering](https://en.wikipedia.org/wiki/Ordered_dithering) patterns.
 Instead of encoding the conditional in the formula, we just switch formulas in the table once we're past the threshold.
 All our values end up using the exponential range anyway.
-Operator `⨪` is a reciprocal and is used to turn 2.4 into 1 / 2.4.
-Operator `ⁿ` raises the second stack value to the power of the first stack value.
+Operator `reciprocal (⨪)` is used to turn 2.4 into 1 / 2.4.
+Operator `power (ⁿ)` raises the second stack value to the power of the first stack value.
+Operator `floor (⌊)` is applied to the byte values.
+There are also `round (⁅)` and `ceiling (⌈)`
 
 Hex formatting can be required by using `0x0` for the value and binary formatting using `0b0`.
 Hex or binary numbers can be assigned padding by having the initial value have heading zeroes.
@@ -287,9 +307,9 @@ Variants where you track a cumulative value that has varying increments, like ki
 Going from deciban 0 to deciban +/-1 is around 5% difference in probability, around the threshold where a human will intuitively consider the probabilities to be meaningfully different.
 We can make a table that shows the corresponding odds ratios and percentual probabilities for deciban values for unlikely events.
 
-`ₑ` is the exponentiation function, and it can be given a subscript parameter to specify the base.
+We use `exponential (ₑ)` function with a subscript parameter that specifies the base.
 If no base is specified, it is the natural exponentiation function.
-A logarithm function can be written by applying the inversion modifier to `ₑ`: `°ₑ`.
+A logarithm function can be written by applying the `un (°)` inversion modifier to `ₑ`: `°ₑ` ("`unexp`").
 The `~` formatting prefix specifies that the output should be always rounded to integer.
 
 ```
@@ -315,4 +335,26 @@ deciban  1-chance-in   prob
 -18       ~63<          2%<
 -19       ~79<          1%<
 -20      ~100<          1%<
+```
+
+### Compound interest
+
+Writing a compound interest formula is a bit tricky.
+We want to end up with the interest rate plus one behind the number of years, then raise that value to the power of the years.
+To operate on the value under the top value in the stack, we can use the `dip (⊙)` operator.
+Incrementing is a complex formula that contains both the argument 1 and the add operation, so it's enclosed in parentheses.
+After the dip, the rest is straightforward, we raise the incremented interest to the power and multiply by the initial sum.
+
+Input:
+
+```
+start_sum interest years end_sum
+10000 5% 20 <dip(1+)pow*
+```
+
+Output:
+
+```
+start_sum  interest  years  end_sum
+10000      5%        20     26532.98<⊙(1+)ⁿ×
 ```
