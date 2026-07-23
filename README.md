@@ -12,7 +12,7 @@ Usage: Compile the Rust program and install it on your path.
 Write unformatted tables and pipe them through `teb` command-line command from your editor to get the columns formatted and the formulas evaluated.
 
 Spreadsheet formulas are preceded by an ASCII left angle bracket `<` (to indicate the value coming from the right) and use stack-based tacit programming with the preceding row values used as stack values.
-The syntax for formulas is influenced by [Uiua](https://www.uiua.org/).
+The syntax for formulas is influenced by [Uiua](https://www.uiua.org/), but the formulas use [Forth](https://en.wikipedia.org/wiki/Forth_%28programming_language%29) style left-to-right reverse Polish notation.
 
 Teb uses the same whitespace-separated table style as [IDM](https://github.com/rsaarelm/idm) and can be used to format IDM tables.
 
